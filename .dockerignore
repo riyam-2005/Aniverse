@@ -1,0 +1,38 @@
+# Secrets — the Dockerfile sets build-time placeholders itself; the real
+# .env must never enter a build layer (layers can be cached/inspected/
+# pushed to a registry even though the final `runner` stage never copies
+# this file explicitly).
+.env
+.env.local
+.env.*.local
+
+# Version control / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Never needed in the image — reinstalled fresh in the deps stage
+node_modules
+
+# Build output — regenerated inside the image
+.next
+out
+
+# Tests / dev tooling — not part of the runtime image
+e2e
+playwright-report
+test-results
+coverage
+*.test.ts
+*.test.tsx
+vitest.config.ts
+vitest.setup.ts
+playwright.config.ts
+docker-compose.test.yml
+
+# Misc
+*.log
+.DS_Store
+README.md
+DEPLOYMENT.md

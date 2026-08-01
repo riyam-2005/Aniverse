@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment files — real secrets live here, never commit these.
+# env.example is the checked-in template; everything else is local-only.
+.env
+.env.local
+.env.*.local
+
+# Local SQLite databases
+*.db
+*.db-journal
+prisma/dev.db
+prisma/e2e-test.db
+
+# Generated Postgres schema (derived from schema.prisma — see
+# scripts/generate-postgres-schema.mjs)
+prisma/schema.postgres.prisma
+
+# Test/build artifacts
+coverage/
+playwright-report/
+test-results/
+/blob-report/
+
+# Editor/OS
+.DS_Store
+*.pem
+.vscode/
+.idea/
+
+# Vercel
+.vercel
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

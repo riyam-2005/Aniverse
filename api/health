@@ -1,0 +1,1 @@
+{"status":"ok","checks":{"db":{"status":"ok"},"jikan":{"status":"ok","failures":0,"circuitOpen":false,"backend":"memory"}},"process":{"uptimeSeconds":4,"memoryMb":71},"responseTimeMs":48,"time":"2026-08-01T14:55:06.393Z"}

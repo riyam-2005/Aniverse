@@ -1,0 +1,9 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /watchlist
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /admin
+
+Sitemap: http://localhost:3000/sitemap.xml
