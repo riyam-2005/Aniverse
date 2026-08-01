@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  // Optional phone-based sign-in, added alongside email/password and Google.
+  // E.164 format (e.g. "+15551234567"). Null until the user adds/verifies
+  // one from account settings. phoneVerifiedAt gates whether it can be used
+  // to sign in — a phone number that was entered but never OTP-confirmed
+  // must not grant access.
+  phone           String?   @unique
+  phoneVerifiedAt DateTime?
+  // Comma-separated Jikan genre mal_ids, e.g. "1,4,10" — captured once at
+  // onboarding to seed recommendations for users with an empty watchlist
+  // (the weighted "because you watched" algorithm in src/app/page.tsx has
+  // nothing to work with until someone actually adds a title). Deliberately
+  // a plain string, not a native array column: the dev/default datasource
+  // is SQLite, which Prisma doesn't support scalar list types on — see
+  // scripts/generate-postgres-schema.mjs for why schema.prisma stays
+  // SQLite-first even though production runs Postgres.
+  preferredGenres String @default("")
+  // "USER" | "ADMIN" — gates /admin (analytics + monitoring dashboards).
+  // A plain string rather than a Prisma enum for the same reason as most
+  // string fields in this schema: enums require a migration to add a new
+  // value, and there's no near-term need for more than these two. Granting
+  // admin is a direct DB write for now (see README) — deliberately no
+  // self-serve UI for this yet, since that's its own auth-surface to get
+  // right and only matters once there's more than one admin to manage.
+  role String @default("USER")
+  watchlist   WatchlistItem[]
+  resetTokens PasswordResetToken[]
+  comments    Comment[]
+  reviews     Review[]
+  notifications Notification[]
+  commentLikes CommentLike[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+
+model WatchlistItem {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  malId         Int
+  title         String
+  imageUrl      String
+  totalEpisodes Int?
+  status        String @default("PLANNING")
+  progress      Int         @default(0)
+  score         Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([userId, malId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  animeMalId Int
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+  likes     CommentLike[]
+
+  @@index([animeMalId, createdAt])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // One like per user per comment — liking again is a no-op/toggle-off,
+  // handled by the API rather than the DB rejecting a duplicate insert.
+  @@unique([commentId, userId])
+  @@index([commentId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  animeMalId Int
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int
+  body       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // One review per user per title — posting again edits it rather than
+  // stacking duplicates.
+  @@unique([userId, animeMalId])
+  @@index([animeMalId, createdAt])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String   // "NEW_EPISODE" | "NEW_COMMENT"
+  message    String
+  animeMalId Int
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Powers both the polling query (unread-for-user, newest-first) and the
+  // dedupe check that avoids stacking duplicate "new comment" pings for
+  // the same anime while one's already unread.
+  @@index([userId, read, createdAt])
+  @@index([userId, type, animeMalId, read])
+}
+
+// Tracks the last known episode count per anime so the cron job can detect
+// "a new episode just aired" by diffing against Jikan on each run, without
+// hitting the API once per watchlist item — one row per anime, shared
+// across every user tracking it.
+model AnimeEpisodeCache {
+  malId          Int      @id
+  lastEpisodes   Int      @default(0)
+  updatedAt      DateTime @updatedAt
+}

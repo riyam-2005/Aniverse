@@ -1,0 +1,25 @@
+# Spins up a throwaway Postgres instance so the "swap to Postgres" story
+# in DEPLOYMENT.md can actually be exercised locally, not just described.
+#
+# Usage:
+#   npm run db:test:postgres        # up, migrate, verify, down — one command
+# or step by step:
+#   npm run db:test:postgres:up
+#   npm run db:test:postgres:migrate
+#   npm run db:test:postgres:verify
+#   npm run db:test:postgres:down
+#
+# Runs on port 55432 (not 5432) so it never collides with a Postgres you
+# might already have running locally.
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_USER: aniverse
+      POSTGRES_PASSWORD: aniverse
+      POSTGRES_DB: aniverse_test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data # throwaway — no volume, nothing persists

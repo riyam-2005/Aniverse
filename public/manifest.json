@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "AniVerse — Your Gateway to the Anime Universe",
+  "short_name": "AniVerse",
+  "description": "Discover trending anime, browse by genre, track your watchlist, and never miss a new episode.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A0A10",
+  "theme_color": "#0A0A10",
+  "orientation": "portrait-primary",
+  "categories": ["entertainment"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
