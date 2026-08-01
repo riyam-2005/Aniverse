@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import MonitoringPanel from "@/components/admin/MonitoringPanel";
 
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: "Monitoring — Admin",
   robots: { index: false, follow: false },

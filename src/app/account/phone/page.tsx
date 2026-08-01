@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import PhoneSettingsForm from "@/components/PhoneSettingsForm";
 
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: "Phone Sign-In — AniVerse",
 };

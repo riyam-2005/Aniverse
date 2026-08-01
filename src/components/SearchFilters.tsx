@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import type { Genre } from "@/types/anime";
 
 const TYPES = [
@@ -30,14 +31,7 @@ const SORTS = [
 
 const MIN_SCORES = [0, 6, 7, 7.5, 8, 8.5, 9];
 
-/**
- * Every control here writes straight to the URL (via router.push) rather
- * than local state — that's what lets the results grid stay a plain
- * server component (SearchPage reads searchParams directly) and keeps
- * filtered searches bookmarkable/shareable, same pattern <Pagination />
- * already uses for page numbers.
- */
-export default function SearchFilters({ genres }: { genres: Genre[] }) {
+function SearchFiltersContent({ genres }: { genres: Genre[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -47,8 +41,6 @@ export default function SearchFilters({ genres }: { genres: Genre[] }) {
       if (value) params.set(key, value);
       else params.delete(key);
     }
-    // Any filter change starts back at page 1 — staying on page 4 of a
-    // now-different result set would just show a confusing mismatch.
     params.delete("page");
     router.push(`/search?${params.toString()}`);
   }
@@ -183,5 +175,13 @@ export default function SearchFilters({ genres }: { genres: Genre[] }) {
         </button>
       )}
     </div>
+  );
+}
+
+export default function SearchFilters(props: { genres: Genre[] }) {
+  return (
+    <Suspense fallback={null}>
+      <SearchFiltersContent {...props} />
+    </Suspense>
   );
 }

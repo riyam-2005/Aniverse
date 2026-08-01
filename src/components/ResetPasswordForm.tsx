@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, Suspense } from "react";
 import PasswordChecklist, { getPasswordRules } from "./PasswordChecklist";
 
-export default function ResetPasswordForm() {
+function ResetPasswordFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams?.get("token") || "";
@@ -100,5 +100,13 @@ export default function ResetPasswordForm() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function ResetPasswordForm() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordFormContent />
+    </Suspense>
   );
 }

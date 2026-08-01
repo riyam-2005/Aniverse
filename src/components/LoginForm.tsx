@@ -3,13 +3,13 @@
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent, Suspense } from "react";
 import GoogleIcon from "./icons/GoogleIcon";
 import { useFirebasePhoneAuth } from "@/lib/useFirebasePhoneAuth";
 
 const REMEMBER_KEY = "aniverse:rememberedEmail";
 
-export default function LoginForm({
+function LoginFormContent({
   hasGoogle,
   hasPhone = false,
 }: {
@@ -28,10 +28,6 @@ export default function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Phone sign-in — the actual send-code/confirm-code exchange happens
-  // directly between the browser and Firebase (see useFirebasePhoneAuth);
-  // we just hold the typed phone number and forward the resulting ID
-  // token to NextAuth once confirmed.
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const {
@@ -45,7 +41,6 @@ export default function LoginForm({
     reset: resetPhone,
   } = useFirebasePhoneAuth();
 
-  // Prefill the email field if the user chose "Remember me" last time.
   useEffect(() => {
     const saved = window.localStorage.getItem(REMEMBER_KEY);
     if (saved) setEmail(saved);
@@ -71,9 +66,6 @@ export default function LoginForm({
     setLoading(false);
 
     if (res?.error) {
-      // NextAuth passes through the message we threw from authorize() for
-      // rate limiting; anything else (bad credentials) stays generic on
-      // purpose so we don't reveal whether the email exists.
       setError(
         res.error.toLowerCase().includes("too many")
           ? res.error
@@ -299,5 +291,13 @@ export default function LoginForm({
         .
       </p>
     </div>
+  );
+}
+
+export default function LoginForm(props: { hasGoogle: boolean; hasPhone?: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <LoginFormContent {...props} />
+    </Suspense>
   );
 }

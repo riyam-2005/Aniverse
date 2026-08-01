@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, Suspense } from "react";
 import { useTranslations } from "@/i18n/I18nProvider";
 
-export default function SearchBar({ compact = false }: { compact?: boolean }) {
+function SearchBarContent({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [value, setValue] = useState(searchParams?.get("q") ?? "");
@@ -40,5 +40,13 @@ export default function SearchBar({ compact = false }: { compact?: boolean }) {
         </svg>
       </div>
     </form>
+  );
+}
+
+export default function SearchBar(props: { compact?: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <SearchBarContent {...props} />
+    </Suspense>
   );
 }
