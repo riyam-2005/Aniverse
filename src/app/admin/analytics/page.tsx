@@ -6,6 +6,7 @@ import DailyBarChart from "@/components/admin/DailyBarChart";
 import StatCard from "@/components/admin/StatCard";
 
 export const revalidate = 60;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Analytics — Admin",

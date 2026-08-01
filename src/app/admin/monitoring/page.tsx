@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import MonitoringPanel from "@/components/admin/MonitoringPanel";
 
 export const revalidate = 60;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Monitoring — Admin",

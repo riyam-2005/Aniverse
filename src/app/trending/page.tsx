@@ -11,6 +11,7 @@ import Pagination from "@/components/Pagination";
 import TrendingStats from "@/components/TrendingStats";
 
 export const revalidate = 1800;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Trending Anime — AniVerse",

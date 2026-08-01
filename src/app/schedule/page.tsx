@@ -7,6 +7,7 @@ import OfflinePicksNotice from "@/components/OfflinePicksNotice";
 import { FALLBACK_ANIME } from "@/lib/fallback-anime";
 
 export const revalidate = 3600;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Weekly Airing Schedule — AniVerse",

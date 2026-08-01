@@ -10,6 +10,7 @@ import Pagination from "@/components/Pagination";
 import GenreExplorer from "@/components/GenreExplorer";
 
 export const revalidate = 86400;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Browse Anime by Genre — AniVerse",

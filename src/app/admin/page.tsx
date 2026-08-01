@@ -6,6 +6,7 @@ import { percentChange } from "@/lib/analytics";
 import StatCard from "@/components/admin/StatCard";
 
 export const revalidate = 60;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Admin — AniVerse",

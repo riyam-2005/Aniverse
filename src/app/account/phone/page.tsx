@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import PhoneSettingsForm from "@/components/PhoneSettingsForm";
 
 export const revalidate = 60;
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Phone Sign-In — AniVerse",
