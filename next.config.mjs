@@ -6,11 +6,12 @@ const nextConfig = {
   // copies them into .next/standalone — lets the Docker image ship without
   // node_modules at all (see Dockerfile), which is most of the size
   // difference between a ~1.2GB naive image and a ~150MB one here.
-  output: "standalone",
+  output: process.env.NEXT_EXPORT === "true" ? "export" : "standalone",
   // Stops the app from advertising "X-Powered-By: Next.js" to every
   // response — a small bit of fingerprinting reduction, no functional cost.
   poweredByHeader: false,
   images: {
+    unoptimized: process.env.NEXT_EXPORT === "true",
     remotePatterns: [
       { protocol: "https", hostname: "cdn.myanimelist.net" },
       { protocol: "https", hostname: "*.cdn.myanimelist.net" },
