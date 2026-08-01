@@ -19,13 +19,11 @@ interface SearchPageParams {
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: SearchPageParams;
+  searchParams?: SearchPageParams;
 }): Promise<Metadata> {
-  const q = searchParams.q?.trim();
+  const q = searchParams?.q?.trim();
   return {
     title: q ? `"${q}" search results — AniVerse` : "Search — AniVerse",
-    // Search result pages are low-value, near-duplicate content for
-    // crawlers — keep them out of the index, but still perfectly linkable.
     robots: { index: false },
   };
 }
@@ -33,24 +31,22 @@ export async function generateMetadata({
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: SearchPageParams;
+  searchParams?: SearchPageParams;
 }) {
-  const q = searchParams.q?.trim() ?? "";
-  const page = Math.max(1, Number(searchParams.page) || 1);
+  const q = searchParams?.q?.trim() ?? "";
+  const page = Math.max(1, Number(searchParams?.page) || 1);
 
   const filters = {
-    type: searchParams.type,
-    status: searchParams.status,
-    minScore: searchParams.min_score ? Number(searchParams.min_score) : undefined,
-    genres: searchParams.genres
+    type: searchParams?.type,
+    status: searchParams?.status,
+    minScore: searchParams?.min_score ? Number(searchParams.min_score) : undefined,
+    genres: searchParams?.genres
       ? searchParams.genres.split(",").filter(Boolean).map(Number)
       : undefined,
-    orderBy: searchParams.order_by,
-    sort: searchParams.sort as "asc" | "desc" | undefined,
+    orderBy: searchParams?.order_by,
+    sort: searchParams?.sort as "asc" | "desc" | undefined,
   };
 
-  // A filter-only browse (no typed query) is just as valid as a text
-  // search — only skip the fetch when there's truly nothing to search by.
   const hasActiveSearch =
     !!q || !!filters.type || !!filters.status || !!filters.minScore || !!filters.genres?.length;
 
@@ -63,17 +59,14 @@ export default async function SearchPage({
   const failed = hasActiveSearch ? raw === null : false;
   const result = raw ?? { data: [] };
 
-  // Preserved across pagination links and passed back into the filter
-  // panel's initial state via the URL — this is the full set of params
-  // that define "what search is this," not just the text query.
   const preservedParams = {
     q: q || undefined,
     type: filters.type,
     status: filters.status,
-    min_score: searchParams.min_score,
-    genres: searchParams.genres,
-    order_by: searchParams.order_by,
-    sort: searchParams.sort,
+    min_score: searchParams?.min_score,
+    genres: searchParams?.genres,
+    order_by: searchParams?.order_by,
+    sort: searchParams?.sort,
   };
 
   return (

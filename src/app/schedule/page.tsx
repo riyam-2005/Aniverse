@@ -22,11 +22,11 @@ export const metadata: Metadata = {
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: { day?: string };
+  searchParams?: { day?: string };
 }) {
   const todayIndex = new Date().getDay();
   const todayLabel = WEEKDAYS[todayIndex];
-  const day: Weekday = WEEKDAYS.includes(searchParams.day as Weekday)
+  const day: Weekday = searchParams?.day && WEEKDAYS.includes(searchParams.day as Weekday)
     ? (searchParams.day as Weekday)
     : todayLabel;
 

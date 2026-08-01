@@ -65,7 +65,12 @@ export default async function HomePage() {
     return true;
   });
 
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    session = null;
+  }
   const userId = (session?.user as { id?: string } | undefined)?.id;
 
   let continueItems: ContinueItem[] = [];
@@ -74,11 +79,12 @@ export default async function HomePage() {
   let recommendationMode: "watchlist" | "genres" = "watchlist";
 
   if (userId) {
-    const watchlist = await prisma.watchlistItem.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      take: 20,
-    });
+    try {
+      const watchlist = await prisma.watchlistItem.findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+      });
 
     continueItems = watchlist
       .filter((w) => w.status === "WATCHING")
@@ -200,6 +206,9 @@ export default async function HomePage() {
           .filter((name): name is string => !!name);
         recommendationMode = "genres";
       }
+    }
+    } catch {
+      // Ignore DB/Auth errors at static export build time
     }
   }
 

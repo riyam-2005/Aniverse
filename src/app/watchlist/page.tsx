@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getServerSession } from "next-auth/next";
-import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import WatchlistBoard, { type Item } from "@/components/WatchlistBoard";
@@ -13,17 +12,26 @@ export const metadata: Metadata = {
 };
 
 export default async function WatchlistPage() {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    session = null;
+  }
   const userId = (session?.user as { id?: string } | undefined)?.id;
 
-  if (!userId) {
-    redirect("/login?callbackUrl=/watchlist");
+  let items: Item[] = [];
+  if (userId) {
+    try {
+      const dbItems = await prisma.watchlistItem.findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+      });
+      items = dbItems as unknown as Item[];
+    } catch {
+      items = [];
+    }
   }
-
-  const items = await prisma.watchlistItem.findMany({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-  });
 
   return (
     <div className="container-page py-10">
@@ -31,7 +39,7 @@ export default async function WatchlistPage() {
       <h1 className="font-display text-5xl tracking-wide text-ink">My Watchlist</h1>
 
       <div className="mt-8">
-        <WatchlistBoard initialItems={items as unknown as Item[]} />
+        <WatchlistBoard initialItems={items} />
       </div>
     </div>
   );

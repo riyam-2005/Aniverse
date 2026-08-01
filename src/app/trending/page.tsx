@@ -33,10 +33,10 @@ const TABS = [
 export default async function TrendingPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; page?: string };
+  searchParams?: { tab?: string; page?: string };
 }) {
-  const tab = TABS.some((t) => t.key === searchParams.tab) ? searchParams.tab! : "airing";
-  const page = Math.max(1, Number(searchParams.page) || 1);
+  const tab = searchParams?.tab && TABS.some((t) => t.key === searchParams.tab) ? searchParams.tab : "airing";
+  const page = Math.max(1, Number(searchParams?.page) || 1);
 
   const fetchers: Record<string, (page: number) => Promise<JikanListResponse<Anime>>> = {
     airing: getTopAiring,
@@ -47,10 +47,6 @@ export default async function TrendingPage({
 
   const raw = await fetchers[tab](page).catch(() => null);
   const failed = raw === null;
-  // Only substitute the offline picks on page 1 — a failure on page 2+
-  // still gets the plain retry notice, since silently swapping in
-  // unrelated fallback content deep in pagination would be more
-  // confusing than helpful there.
   const showFallback = failed && page === 1;
   const result = raw ?? { data: showFallback ? FALLBACK_ANIME : [] };
 

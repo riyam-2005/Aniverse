@@ -27,7 +27,7 @@ const FEATURED_GENRE_IDS = [1, 2, 4, 8, 10, 22, 24, 27, 30, 36, 37, 41];
 export default async function GenresPage({
   searchParams,
 }: {
-  searchParams: { id?: string; page?: string };
+  searchParams?: { id?: string; page?: string };
 }) {
   const genresRaw = await getGenres().catch(() => null);
   const genresFailed = genresRaw === null;
@@ -36,11 +36,11 @@ export default async function GenresPage({
   const featuredIds = new Set(featured.map((g) => g.mal_id));
   const otherGenres = genres.filter((g) => !featuredIds.has(g.mal_id));
 
-  const selectedId = searchParams.id
+  const selectedId = searchParams?.id
     ? Number(searchParams.id)
     : (featured[0] ?? genres[0])?.mal_id;
   const selected = genres.find((g) => g.mal_id === selectedId);
-  const page = Math.max(1, Number(searchParams.page) || 1);
+  const page = Math.max(1, Number(searchParams?.page) || 1);
 
   const animeRaw = selectedId
     ? await getAnimeByGenre(selectedId, page).catch(() => null)
