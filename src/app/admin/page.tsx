@@ -5,7 +5,7 @@ import { getJikanHealth } from "@/lib/jikan";
 import { percentChange } from "@/lib/analytics";
 import StatCard from "@/components/admin/StatCard";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Admin — AniVerse",

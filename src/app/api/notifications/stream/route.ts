@@ -3,11 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-// Runs on the Node runtime (needed for a long-lived streaming response —
-// not available on Edge in this Next.js version) and must never be
-// statically optimized, since the body is per-user and infinite.
+// Runs on Node runtime
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const CHECK_INTERVAL_MS = 4_000;
 // Vercel serverless functions have a hard execution-time ceiling regardless

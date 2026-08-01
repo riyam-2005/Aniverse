@@ -19,6 +19,21 @@ const CommentSection = dynamic(() => import("@/components/CommentSection"), {
   loading: () => <CommentListSkeleton count={3} />,
 });
 
+export function generateStaticParams() {
+  return [
+    { id: "1" },
+    { id: "20" },
+    { id: "5114" },
+    { id: "9253" },
+    { id: "11061" },
+    { id: "30276" },
+    { id: "31964" },
+    { id: "38000" },
+    { id: "40028" },
+    { id: "44511" },
+  ];
+}
+
 export const revalidate = 3600;
 
 function platformColor(name: string) {

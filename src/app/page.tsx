@@ -44,7 +44,7 @@ const ShareSection = nextDynamic(() => import("@/components/ShareSection"));
 // can no longer be a fully static/ISR route — it renders per-request. The
 // underlying Jikan calls still hit Next's fetch data cache (see lib/jikan.ts),
 // so this doesn't reintroduce the API-hammering the caching work solved.
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export default async function HomePage() {
   const todayIndex = new Date().getDay();

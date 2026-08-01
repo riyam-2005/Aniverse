@@ -5,7 +5,7 @@ import { bucketByDay, percentChange, topGenreIds } from "@/lib/analytics";
 import DailyBarChart from "@/components/admin/DailyBarChart";
 import StatCard from "@/components/admin/StatCard";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Analytics — Admin",

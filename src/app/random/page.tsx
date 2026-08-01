@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getRandomAnime } from "@/lib/jikan";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function RandomAnimePage() {
   const anime = await getRandomAnime();
