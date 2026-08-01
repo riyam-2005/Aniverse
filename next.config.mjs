@@ -1,18 +1,19 @@
 import bundleAnalyzer from "@next/bundle-analyzer";
 
-const isGithubActions = process.env.GITHUB_ACTIONS || false;
-const repoName = "Aniverse";
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export",
-  basePath: isGithubActions ? `/${repoName}` : "",
-  assetPrefix: isGithubActions ? `/${repoName}/` : "",
+  output: "standalone",
   poweredByHeader: false,
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "cdn.myanimelist.net" },
+      { protocol: "https", hostname: "*.cdn.myanimelist.net" },
+    ],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
   experimental: {
+    instrumentationHook: true,
     optimizePackageImports: ["framer-motion"],
   },
 };

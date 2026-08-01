@@ -17,6 +17,10 @@ import { checkRateLimit } from "@/lib/rate-limit";
  * automatically (see `onDelete: Cascade` on CommentLike.comment in
  * schema.prisma) — no manual cleanup needed here.
  */
+export function generateStaticParams() {
+  return [{ id: "1" }];
+}
+
 export const DELETE = withApiHandler(
   async (_req, { params }: { params: { id: string } }) => {
     const session = await getServerSession(authOptions);

@@ -22,6 +22,10 @@ async function requireOwnedItem(id: string, userId: string) {
   return item;
 }
 
+export function generateStaticParams() {
+  return [{ id: "1" }];
+}
+
 export const PATCH = withApiHandler(
   async (req: Request, { params }: { params: { id: string } }) => {
     const userId = await requireUserId();

@@ -10,6 +10,10 @@ const upsertSchema = z.object({
   body: z.string().trim().max(2000, "Review is too long (max 2000 characters)").optional(),
 });
 
+export function generateStaticParams() {
+  return [{ id: "1" }];
+}
+
 export const GET = withApiHandler(async (req: Request, { params }: { params: { id: string } }) => {
   const animeMalId = Number(params.id);
   if (!Number.isFinite(animeMalId)) {

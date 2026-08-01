@@ -24,28 +24,35 @@ function timeAgo(date: Date) {
 }
 
 export default async function CommunityPage() {
-  const recentComments = await prisma.comment.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    include: { user: { select: { name: true } } },
-  });
+  let recentComments: any[] = [];
+  try {
+    recentComments = await prisma.comment.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      include: { user: { select: { name: true } } },
+    });
+  } catch {
+    recentComments = [];
+  }
 
-  // Resolve each unique anime title/poster from Jikan so the feed can show
-  // what people are actually talking about, not just a bare ID.
   const uniqueIds = Array.from(new Set(recentComments.map((c) => c.animeMalId)));
   const animeMap = new Map<number, { title: string; image: string | null }>();
 
-  await Promise.all(
-    uniqueIds.map(async (id) => {
-      const anime = await getAnimeById(id);
-      if (anime) {
-        animeMap.set(id, {
-          title: anime.title_english || anime.title,
-          image: anime.images?.jpg?.image_url ?? null,
-        });
-      }
-    })
-  );
+  try {
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        const anime = await getAnimeById(id).catch(() => null);
+        if (anime) {
+          animeMap.set(id, {
+            title: anime.title_english || anime.title,
+            image: anime.images?.jpg?.image_url ?? null,
+          });
+        }
+      })
+    );
+  } catch {
+    // Ignore build-time fetch errors
+  }
 
   return (
     <div className="container-page py-10">

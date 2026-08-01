@@ -13,6 +13,10 @@ const createSchema = z.object({
     .max(1000, "Comment is too long (max 1000 characters)"),
 });
 
+export function generateStaticParams() {
+  return [{ id: "1" }];
+}
+
 export const GET = withApiHandler(async (req: Request, { params }: { params: { id: string } }) => {
   const animeMalId = Number(params.id);
   if (!Number.isFinite(animeMalId)) {
