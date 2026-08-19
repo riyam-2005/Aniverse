@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --c-void: 10 10 16;
+    --c-panel: 19 19 32;
+    --c-panel2: 26 26 43;
+    --c-line: rgba(237, 234, 227, 0.09);
+    --c-ink: 237 234 227;
+    --c-ink-dim: 156 153 174;
+    --c-ink-faint: 99 95 115;
+    --c-pink: 255 68 112;
+    --c-pink-dim: 199 51 89;
+    --c-cyan: 63 224 208;
+    --c-cyan-dim: 43 168 156;
+    --c-amber: 255 176 59;
+  }
+
+  :root.light {
+    color-scheme: light;
+    --c-void: 250 250 252;
+    --c-panel: 255 255 255;
+    --c-panel2: 242 242 247;
+    --c-line: rgba(20, 18, 30, 0.09);
+    --c-ink: 20 19 28;
+    --c-ink-dim: 90 87 104;
+    --c-ink-faint: 146 143 160;
+    --c-pink: 224 32 90;
+    --c-pink-dim: 184 24 74;
+    --c-cyan: 9 140 130;
+    --c-cyan-dim: 7 112 104;
+    --c-amber: 189 108 8;
+  }
+
+  * {
+    @apply border-line;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-void text-ink font-body antialiased transition-colors duration-300;
+  }
+  ::selection {
+    @apply bg-pink/30 text-ink;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-void;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-panel2 rounded-full;
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.cyan.DEFAULT");
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10;
+  }
+
+  .eyebrow {
+    @apply relative inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-faint;
+  }
+  .eyebrow::before {
+    content: "";
+    @apply h-[3px] w-4 rounded-full bg-gradient-to-r from-cyan to-pink;
+  }
+
+  .card {
+    @apply bg-panel border border-line rounded-lg;
+  }
+
+  /* Signature loading treatment: a diagonal light sweep in the brand's
+     cyan-to-pink duotone, instead of a flat opacity pulse — reads as
+     part of this app's look rather than a generic library default. */
+  .skeleton {
+    @apply relative overflow-hidden rounded bg-panel2;
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgb(var(--c-cyan) / 0.12) 45%,
+      rgb(var(--c-pink) / 0.14) 55%,
+      transparent 70%
+    );
+    animation: shimmerSweep 1.8s ease-in-out infinite;
+  }
+  @keyframes shimmerSweep {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton::after {
+      animation: none;
+    }
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-[color,background-color,transform] duration-200 active:scale-[0.96];
+  }
+  .btn-primary {
+    @apply btn bg-pink text-void hover:bg-pink-dim;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-transparent text-ink hover:bg-panel2;
+  }
+  .btn-ghost {
+    @apply btn text-ink-dim hover:text-ink hover:bg-panel2;
+  }
+
+  /* Applied to grid containers (AnimeGrid, trending, search, genres) so
+     cards ease in with a short stagger instead of popping in all at once
+     on first paint — pure CSS (no JS/client-component cost) since every
+     card here is a server component. Capped at 12 children: beyond that,
+     the delay would just make lower rows feel sluggish rather than
+     "polished," so anything past #12 renders immediately. */
+  .stagger-fade > * {
+    animation: fadeInUp 0.45s ease-out backwards;
+  }
+  .stagger-fade > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-fade > *:nth-child(2) { animation-delay: 30ms; }
+  .stagger-fade > *:nth-child(3) { animation-delay: 60ms; }
+  .stagger-fade > *:nth-child(4) { animation-delay: 90ms; }
+  .stagger-fade > *:nth-child(5) { animation-delay: 120ms; }
+  .stagger-fade > *:nth-child(6) { animation-delay: 150ms; }
+  .stagger-fade > *:nth-child(7) { animation-delay: 180ms; }
+  .stagger-fade > *:nth-child(8) { animation-delay: 210ms; }
+  .stagger-fade > *:nth-child(9) { animation-delay: 240ms; }
+  .stagger-fade > *:nth-child(10) { animation-delay: 270ms; }
+  .stagger-fade > *:nth-child(11) { animation-delay: 300ms; }
+  .stagger-fade > *:nth-child(n+12) { animation-delay: 330ms; }
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Quick scale "pop" for a state toggle the user just triggered (a like,
+     a new unread badge appearing) — distinct from the slower hover/color
+     transitions above, meant to read as an immediate reaction to input. */
+  .pop-in {
+    animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes popIn {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .input {
+    @apply w-full rounded-md border border-line bg-panel2 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-cyan/60 transition-colors;
+  }
+
+  .input-pill {
+    @apply w-full rounded-full border border-line bg-panel2 px-5 py-3 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-cyan/60 transition-colors;
+  }
+
+  .btn-oauth {
+    @apply flex w-full items-center justify-center gap-3 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90;
+  }
+
+  .on-air-dot {
+    @apply relative inline-flex h-2 w-2 rounded-full bg-pink animate-pulse-dot;
+  }
+}
+
+/* Installed as a PWA (see manifest.json/sw.js), this app runs edge-to-edge
+   on notched phones — without these, the sticky header and mobile menu
+   sit under the status bar / home indicator instead of respecting it. */
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+  .safe-bottom {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

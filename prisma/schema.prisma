@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  // Hashed with bcrypt/argon2 at the API layer before this is ever
+  // written — never store or compare plaintext here. Named *Hash to
+  // match tokenHash/codeHash/refreshTokenHash elsewhere in this schema,
+  // so "is this a secret we hashed" is answerable from the field name
+  // alone instead of tribal knowledge.
+  passwordHash String
+  createdAt DateTime @default(now())
+  // Optional phone-based sign-in, added alongside email/password and Google.
+  // E.164 format (e.g. "+15551234567"). Null until the user adds/verifies
+  // one from account settings. phoneVerifiedAt gates whether it can be used
+  // to sign in — a phone number that was entered but never OTP-confirmed
+  // must not grant access.
+  phone           String?   @unique
+  phoneVerifiedAt DateTime?
+  // Comma-separated Jikan genre mal_ids, e.g. "1,4,10" — captured once at
+  // onboarding to seed recommendations for users with an empty watchlist
+  // (the weighted "because you watched" algorithm in src/app/page.tsx has
+  // nothing to work with until someone actually adds a title). Deliberately
+  // a plain string, not a native array column: the dev/default datasource
+  // is SQLite, which Prisma doesn't support scalar list types on — see
+  // scripts/generate-postgres-schema.mjs for why schema.prisma stays
+  // SQLite-first even though production runs Postgres.
+  preferredGenres String @default("")
+  // "USER" | "ADMIN" — gates /admin (analytics + monitoring dashboards).
+  // A plain string rather than a Prisma enum for the same reason as most
+  // string fields in this schema: enums require a migration to add a new
+  // value, and there's no near-term need for more than these two. Granting
+  // admin is a direct DB write for now (see README) — deliberately no
+  // self-serve UI for this yet, since that's its own auth-surface to get
+  // right and only matters once there's more than one admin to manage.
+  role String @default("USER")
+  watchlist   WatchlistItem[]
+  resetTokens PasswordResetToken[]
+  comments    Comment[]
+  reviews     Review[]
+  notifications Notification[]
+  commentLikes CommentLike[]
+
+  continueWatching ContinueWatching[]
+  watchHistory     WatchHistory[]
+  sessions         Session[]
+  badges           UserBadge[]
+  animeFollows     AnimeFollow[]
+  externalAccounts ExternalAccount[]
+  adminLogs        AdminLog[]        @relation("AdminLogsAuthored")
+  // Reports the user filed against a comment/review/other user.
+  reportsFiled    Report[] @relation("ReportsFiled")
+  // Reports an admin/mod resolved (only ever populated for role=ADMIN users).
+  reportsResolved Report[] @relation("ReportsResolved")
+  // Reports filed against this user's account (not their content).
+  reportsAgainst  Report[] @relation("ReportsAgainstUser")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  // Supports a periodic cleanup job (`DELETE WHERE expiresAt < now()`)
+  // without a table scan — reset tokens accumulate indefinitely otherwise.
+  @@index([expiresAt])
+}
+
+
+model WatchlistItem {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  malId         Int
+  anime         Anime    @relation(fields: [malId], references: [malId])
+  // Snapshot at add-time for read performance (avoids a join on every
+  // watchlist render). malId itself is now a real FK, so this can only
+  // go stale, never point at a nonexistent anime — reconcile against
+  // Anime[malId] periodically to catch upstream title/poster changes.
+  title         String
+  imageUrl      String
+  totalEpisodes Int?
+  status        String @default("PLANNING")
+  progress      Int         @default(0)
+  score         Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([userId, malId])
+  @@index([malId])
+  // Powers the tabbed watchlist view (e.g. "Watching" / "Completed" /
+  // "Planning") sorted by recency, without falling back to a scan of
+  // every item a user has ever added — matters once watchlists run
+  // into the hundreds/thousands of entries.
+  @@index([userId, status, updatedAt])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  animeMalId Int
+  anime      Anime    @relation(fields: [animeMalId], references: [malId])
+  content    String
+  createdAt  DateTime @default(now())
+  // Moderation/self-delete leaves the row in place instead of a hard
+  // DELETE, so a Report or AdminLog that references this comment still
+  // has something to point at, and the UI can render "[removed]"
+  // instead of a dangling reference. The API is responsible for
+  // filtering deletedAt: null on normal reads and for blanking
+  // `content` (or leaving it for mod-only views) once set.
+  deletedAt  DateTime?
+  likes      CommentLike[]
+  // Cached count, updated in the same transaction as the CommentLike
+  // insert/delete. At millions of comments, computing this with
+  // COUNT(*) on CommentLike for every row in a comment feed is the
+  // difference between an index scan and a full aggregate per row.
+  likeCount  Int      @default(0)
+  reports    Report[]
+
+  // "my comments" / profile activity feed.
+  @@index([userId, createdAt])
+  // Per-anime comment feed, filtered to live (non-deleted) comments
+  // first so the common-case query never has to skip removed rows.
+  // `id` is appended as a tiebreaker: two comments can share a
+  // createdAt millisecond at this volume, and without it a
+  // keyset-paginated query (`createdAt < cursor`) can skip or repeat
+  // rows across pages. Cursor-based pagination (not OFFSET) is what
+  // this index is for — OFFSET pagination degrades linearly with page
+  // depth once this table is in the millions.
+  @@index([animeMalId, deletedAt, createdAt, id])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // One like per user per comment — liking again is a no-op/toggle-off,
+  // handled by the API rather than the DB rejecting a duplicate insert.
+  @@unique([commentId, userId])
+  @@index([commentId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  animeMalId Int
+  anime      Anime    @relation(fields: [animeMalId], references: [malId])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int
+  body       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  // Same rationale as Comment.deletedAt — keeps the row addressable
+  // for Report/AdminLog history instead of a hard delete.
+  deletedAt  DateTime?
+  reports    Report[]
+
+  // One review per user per title — posting again edits it rather than
+  // stacking duplicates.
+  @@unique([userId, animeMalId])
+  @@index([animeMalId, deletedAt, createdAt, id])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // "NEW_EPISODE" | "DUB_RELEASE" | "MOVIE_ANNOUNCED" | "REPLY" | "LIKE" |
+  // "ADMIN" | "SYSTEM". Kept as a plain string rather than a Prisma `enum`
+  // for the same reason as `role`/`preferredGenres` above: SQLite has no
+  // native enum type, so Prisma can't emit one for this datasource — a
+  // native enum only becomes an option if/when this moves to Postgres.
+  type       String
+  message    String
+  // Nullable: ADMIN and SYSTEM notifications aren't about any specific
+  // anime. This was a real bug in the previous version of this schema —
+  // animeMalId was required, which meant every ADMIN/SYSTEM notification
+  // had to be written with a fake or arbitrary malId to satisfy the
+  // column. Now optional, with a real FK when it is set.
+  animeMalId Int?
+  anime      Anime?   @relation(fields: [animeMalId], references: [malId])
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Powers both the polling query (unread-for-user, newest-first) and the
+  // dedupe check that avoids stacking duplicate "new comment" pings for
+  // the same anime while one's already unread.
+  @@index([userId, read, createdAt, id])
+  @@index([userId, type, animeMalId, read])
+  @@index([animeMalId])
+}
+
+// Canonical local record for an anime, keyed by MAL id. This is what
+// closes the last integrity gap in the schema: every other model that
+// used to hold a bare `malId Int` (Comment, Review, WatchlistItem,
+// ContinueWatching, WatchHistory, Notification, AnimeFollow) now holds
+// a real foreign key against this table, so a typo'd or nonexistent
+// malId is rejected by the database instead of silently accepted.
+// Rows are upserted lazily — the first time any of those models
+// references a given malId, the API upserts an Anime row for it before
+// the write (same pattern as any FK-backed reference to external data).
+// title/imageUrl/lastEpisodes are refreshed by the existing Jikan-diff
+// cron; this table is the one source of truth those fields get
+// reconciled against everywhere else in the schema.
+model Anime {
+  malId        Int      @id
+  title        String
+  imageUrl     String
+  lastEpisodes Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  watchlistItems   WatchlistItem[]
+  continueWatching ContinueWatching[]
+  watchHistory     WatchHistory[]
+  comments         Comment[]
+  reviews          Review[]
+  notifications    Notification[]
+  follows          AnimeFollow[]
+}
+
+// The mutable "where am I" pointer for a user+anime pair: one row per
+// (userId, malId), upserted on every player heartbeat/pause. This is what
+// powers a "Continue Watching" rail. It's deliberately separate from
+// WatchHistory below — that's an append-only log of watch events, this is
+// current state. Collapsing them into one table would mean either losing
+// history on every progress update or growing one row per heartbeat.
+model ContinueWatching {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  malId         Int
+  anime         Anime    @relation(fields: [malId], references: [malId])
+  // Same denormalize-for-read-speed / reconcile-against-Anime tradeoff
+  // as WatchlistItem.title/imageUrl above.
+  title         String
+  imageUrl      String
+  episodeNumber Int
+  // Playback position in seconds when the user last stopped watching.
+  timestampSec  Int      @default(0)
+  durationSec   Int?
+  // Last watched time — drives both "resume where you left off" and the
+  // ordering of the Continue Watching rail (most recent first).
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, malId])
+  @@index([malId])
+  @@index([userId, updatedAt])
+}
+
+// Append-only log of watch events, kept separate from ContinueWatching
+// (current state) so progress updates don't destroy history. Feeds
+// recommendations and analytics; also lets "resume watching" fall back to
+// the most recent history entry for an anime that's dropped off
+// ContinueWatching (e.g. after a user finishes and later wants to rewatch).
+model WatchHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  malId         Int
+  anime         Anime    @relation(fields: [malId], references: [malId])
+  episodeNumber Int
+  progressSec   Int?
+  watchedAt     DateTime @default(now())
+
+  @@index([userId, watchedAt, id])
+  // Powers "most-watched anime this week" style analytics without a
+  // table scan.
+  @@index([malId, watchedAt])
+}
+
+// One row per issued refresh token, so a JWT-based auth flow can revoke
+// individual sessions, show "your devices," and rate-limit refresh abuse.
+// Stores a hash of the token, never the token itself — same pattern as
+// PasswordResetToken.tokenHash above.
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  device           String?
+  ipAddress        String?
+  userAgent        String?
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  // Set when the user logs out or an admin force-revokes a session; a
+  // non-null value here means the token is dead even if unexpired.
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  // Same caveat as OtpCode: this index is what a "max N concurrent
+  // sessions per user" policy would query (revoke the oldest active
+  // session when creating one past the cap) — the schema can't enforce
+  // the cap itself.
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Standalone OTP model for phone-based sign-in/verification. Not tied to
+// userId with a relation: an OTP can be requested for a phone number
+// before any account exists for it (e.g. phone-first signup), so `phone`
+// is the lookup key instead.
+model OtpCode {
+  id        String    @id @default(cuid())
+  phone     String
+  codeHash  String
+  // "LOGIN" | "VERIFY_PHONE" — what completing this OTP is allowed to do.
+  purpose   String    @default("LOGIN")
+  expiresAt DateTime
+  usedAt    DateTime?
+  // Failed-attempt counter so the API can lock out a code after N wrong
+  // guesses instead of allowing unlimited brute force against a 6-digit
+  // code.
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  // Not a constraint (a sliding-window cap like "max 5 per phone per
+  // hour" isn't expressible in the schema), but this is the index the
+  // API must query against to enforce one before inserting a new row —
+  // without it, OTP requests are unbounded per phone number.
+  @@index([expiresAt])
+}
+
+// Badge catalog, managed separately from the award itself so new badges
+// (or copy/description tweaks) don't require a migration — just a new row.
+model Badge {
+  id          String      @id @default(cuid())
+  key         String      @unique // "PREMIUM" | "VERIFIED" | "TOP_REVIEWER"
+  label       String
+  description String?
+  users       UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+// Following an anime is distinct from adding it to a WatchlistItem: a user
+// might want release notifications for a title without tracking personal
+// progress/status/score on it (or vice versa). Kept as its own table
+// rather than bolting notify flags onto WatchlistItem for that reason.
+model AnimeFollow {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  malId         Int
+  anime         Anime    @relation(fields: [malId], references: [malId])
+  notifyEpisode Boolean  @default(true)
+  notifyDub     Boolean  @default(true)
+  notifyMovie   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, malId])
+  // Lets the release-detection cron look up "who follows this anime" the
+  // same way AnimeEpisodeCache already does the "did it get a new episode"
+  // half of that job.
+  @@index([malId])
+}
+
+// Reports against a comment, review, or user. Exactly one of
+// commentId/reviewId/reportedUserId must be set — each is now a real FK
+// (a typo'd or stale id is rejected by the database), but the "exactly
+// one, not zero, not two" rule itself can't be written in Prisma's
+// schema DSL (no multi-column CHECK support) or enforced by SQLite.
+// Add this as a hand-written Postgres migration once this schema is on
+// its production datasource — it's the actual database-level guarantee
+// closing this gap, not just an API-layer check:
+//
+//   ALTER TABLE "Report" ADD CONSTRAINT report_target_xor CHECK (
+//     (CASE WHEN "commentId" IS NOT NULL THEN 1 ELSE 0 END +
+//      CASE WHEN "reviewId" IS NOT NULL THEN 1 ELSE 0 END +
+//      CASE WHEN "reportedUserId" IS NOT NULL THEN 1 ELSE 0 END) = 1
+//   );
+//
+// Safe to Cascade because Comment/Review are soft-deleted (see their
+// `deletedAt` fields) — this only fires on an actual account purge, not
+// a moderation removal.
+model Report {
+  id             String    @id @default(cuid())
+  reporterId     String
+  reporter       User      @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  commentId      String?
+  comment        Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reviewId       String?
+  review         Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reportedUserId String?
+  reportedUser   User?     @relation("ReportsAgainstUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reason         String
+  status         String    @default("PENDING") // "PENDING" | "REVIEWED" | "DISMISSED" | "ACTIONED"
+  resolvedById   String?
+  resolvedBy     User?     @relation("ReportsResolved", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([commentId])
+  @@index([reviewId])
+  @@index([reportedUserId])
+}
+
+// Audit trail for moderation/admin actions (deleted reviews, banned users,
+// resolved reports, etc.) — a paper trail for "who did what, when" that's
+// independent of the thing acted on, so it survives even if the target
+// row is later deleted.
+//
+// Unlike Report, this deliberately stays a loose (non-FK) targetType/
+// targetId pair rather than real relations: an audit log's whole job is
+// to outlive its target (e.g. a BAN_USER entry must remain readable
+// after that user account is eventually purged), so a real FK with
+// Cascade would delete the very history this table exists to keep, and
+// SetNull would erase which row it was without a substitute. targetSummary
+// is a snapshot of human-readable context (e.g. "comment by alice@x.com:
+// 'first 80 chars...'") captured at write time, so the entry still reads
+// sensibly once the target is gone.
+model AdminLog {
+  id            String   @id @default(cuid())
+  adminId       String
+  admin         User     @relation("AdminLogsAuthored", fields: [adminId], references: [id], onDelete: Cascade)
+  action        String   // "DELETE_REVIEW" | "DELETE_COMMENT" | "BAN_USER" | "RESOLVE_REPORT" | ...
+  targetType    String?
+  targetId      String?
+  targetSummary String?
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Linked external identities (OAuth logins) and/or issued API keys.
+// providerUserId is the id Google/Discord/GitHub gives that account, not
+// our own User.id — the unique constraint is what lets login-via-provider
+// look up "which of our users is this."
+model ExternalAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String   // "GOOGLE" | "DISCORD" | "GITHUB"
+  providerUserId String
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}

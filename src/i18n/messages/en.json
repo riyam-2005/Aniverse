@@ -1,0 +1,31 @@
+{
+  "nav": {
+    "trending": "Trending",
+    "schedule": "Schedule",
+    "genres": "Genres",
+    "search_placeholder": "Search anime titles…",
+    "sign_in": "Sign in",
+    "sign_up": "Sign up",
+    "sign_out": "Sign out",
+    "join_free": "Join Free",
+    "watchlist": "My List",
+    "random": "Random",
+    "community": "Community"
+  },
+  "footer": {
+    "tagline": "Your gateway to the anime universe.",
+    "about": "About Us",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "contact": "Contact",
+    "faq": "FAQ",
+    "api": "API",
+    "rights": "All rights reserved."
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "language": "Language"
+  }
+}
