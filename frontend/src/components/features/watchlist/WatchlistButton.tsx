@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/core/clients/auth-context";
+import { apiPost } from "@/core/api-client";
 
 export default function WatchlistButton({
   malId,
@@ -34,16 +35,12 @@ export default function WatchlistButton({
   async function handleAdd(selectedStatus: "PLAN_TO_WATCH" | "WATCHING" | "COMPLETED" = status) {
     setState("saving");
     try {
-      const res = await fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          malId,
-          title,
-          imageUrl,
-          totalEpisodes,
-          status: selectedStatus,
-        }),
+      const res = await apiPost("/watchlist", {
+        malId,
+        title,
+        imageUrl,
+        totalEpisodes,
+        status: selectedStatus,
       });
       if (!res.ok) throw new Error();
       setState("saved");

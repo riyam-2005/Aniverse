@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/core/clients/auth-context";
+import { apiGet, apiPost, apiPatch } from "@/core/api-client";
 
 interface NotificationItem {
   id: string;
@@ -37,7 +38,7 @@ export default function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch("/api/notifications");
+      const res = await apiGet("/notifications");
       if (!res.ok) return;
       const data = await res.json();
       setItems(data.notifications ?? []);
@@ -70,7 +71,7 @@ export default function NotificationBell() {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnreadCount(0);
     try {
-      await fetch("/api/notifications/read-all", { method: "POST" });
+      await apiPost("/notifications/read-all", {});
     } catch {
       // Ignored
     }
@@ -80,11 +81,7 @@ export default function NotificationBell() {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     setUnreadCount((c) => Math.max(0, c - 1));
     try {
-      await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
+      await apiPatch("/notifications", { id });
     } catch {
       // Ignored
     }

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { AskAniverseResult, GroundedRecommendation } from "@/features/ai-companion/ai.service";
+import { apiPost } from "@/core/api-client";
 import WatchlistButton from "@/components/features/watchlist/WatchlistButton";
 
 interface ChatMessage {
@@ -63,13 +64,9 @@ export default function AskAniverseChat() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/ai/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: textToSend,
-          history: historyTurns,
-        }),
+      const res = await apiPost("/ai/ask", {
+        prompt: textToSend,
+        history: historyTurns,
       });
 
       if (!res.ok) {
