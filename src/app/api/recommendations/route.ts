@@ -1,60 +1,60 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiOk, withApiHandler } from "@/lib/api";
-import { getTopAnime } from "@/lib/jikan";
-import { FALLBACK_ANIME } from "@/lib/fallback-anime";
+import { apiOk, withApiHandler } from "@/core/utils/api";
+import { createClient, getUser } from "@/core/clients/supabase-server";
+import { getTopAnime, getAnimeByGenre } from "@/core/clients/jikan";
+import { FALLBACK_ANIME } from "@/features/ai-companion/fallback.service";
+import type { Anime } from "@/types/anime";
 
 export const GET = withApiHandler(async () => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const user = await getUser();
 
-  if (!userId) {
-    // Fallback for unauthenticated visitors: top airing anime
+  if (!user) {
+    // Unauthenticated visitors: top airing anime
     const topData = await getTopAnime(1).catch(() => ({ data: FALLBACK_ANIME }));
     return apiOk({
-      anime: (topData.data || FALLBACK_ANIME).slice(0, 10),
+      anime: (topData.data || FALLBACK_ANIME).slice(0, 12),
       basedOnTitles: ["Trending Masterpieces"],
       mode: "watchlist",
     });
   }
 
-  // Fetch user data: preferred genres & watch history/watchlist
-  const [user, watchlist, watchHistory] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { preferredGenres: true },
-    }),
-    prisma.watchlistItem.findMany({
-      where: { userId },
-      select: { malId: true, title: true, status: true, score: true },
-      take: 20,
-    }),
-    prisma.watchHistory.findMany({
-      where: { userId },
-      select: { malId: true },
-      orderBy: { watchedAt: "desc" },
-      take: 10,
-    }),
+  const supabase = createClient();
+
+  // Fetch user library, history, and preferences from Supabase
+  const [libraryRes, historyRes, prefsRes] = await Promise.all([
+    supabase.from("user_anime").select("mal_id, title, status, score").eq("user_id", user.id).limit(25),
+    supabase.from("watch_history").select("mal_id").eq("user_id", user.id).order("watched_at", { ascending: false }).limit(10),
+    supabase.from("user_preferences").select("favorite_genres").eq("user_id", user.id).single(),
   ]);
 
-  const watchedMalIds = new Set([
-    ...watchlist.map((w) => w.malId),
-    ...watchHistory.map((h) => h.malId),
+  const library = libraryRes.data ?? [];
+  const history = historyRes.data ?? [];
+  const favoriteGenreIds: number[] = (prefsRes.data?.favorite_genres as number[] | null) ?? [];
+
+  const watchedMalIds = new Set<number>([
+    ...library.map((w) => w.mal_id),
+    ...history.map((h) => h.mal_id),
   ]);
 
-  const basedOnTitles = watchlist.slice(0, 3).map((w) => w.title);
+  const basedOnTitles = library.slice(0, 3).map((w) => w.title);
 
-  // Fetch top anime pool to filter recommendations
-  const pool = await getTopAnime(1).catch(() => ({ data: FALLBACK_ANIME }));
-  const rawList = pool.data || FALLBACK_ANIME;
+  // If user has preferred genres, fetch from top preferred genre
+  let candidates: Anime[] = [];
+  if (favoriteGenreIds.length > 0) {
+    const genreRes = await getAnimeByGenre(favoriteGenreIds[0], 1).catch(() => ({ data: [] }));
+    candidates = genreRes.data || [];
+  }
 
-  // Filter out titles already in user's watchlist/history
-  const recommended = rawList.filter((anime) => !watchedMalIds.has(anime.mal_id));
+  if (candidates.length === 0) {
+    const pool = await getTopAnime(1).catch(() => ({ data: FALLBACK_ANIME }));
+    candidates = pool.data || FALLBACK_ANIME;
+  }
+
+  // Filter out already watched titles
+  const recommended = candidates.filter((anime) => !watchedMalIds.has(anime.mal_id));
 
   return apiOk({
-    anime: (recommended.length > 0 ? recommended : FALLBACK_ANIME).slice(0, 10),
-    basedOnTitles: basedOnTitles.length > 0 ? basedOnTitles : ["Popular Airing"],
-    mode: watchlist.length > 0 ? "watchlist" : "genres",
+    anime: (recommended.length > 0 ? recommended : FALLBACK_ANIME).slice(0, 12),
+    basedOnTitles: basedOnTitles.length > 0 ? basedOnTitles : ["Curated Selection"],
+    mode: library.length > 0 ? "watchlist" : "genres",
   });
 });

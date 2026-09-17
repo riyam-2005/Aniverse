@@ -1,7 +1,7 @@
 export async function register() {
   // Only run in the Node.js server runtime (not edge, not the browser).
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { validateEnv } = await import("@/lib/env");
+    const { validateEnv } = await import("@/core/utils/env");
     validateEnv();
   }
 }

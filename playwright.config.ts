@@ -5,10 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * - Runs against `next dev` on a dedicated port (4001) so it never collides
  *   with a dev server you might already have running on 3000.
- * - Uses its own SQLite file (e2e-test.db), reset by `pretest:e2e` before
- *   every run via `prisma db push --force-reset` — every run starts from a
- *   clean database, so tests can't pass/fail based on leftover state from a
- *   previous run.
+ * - Authenticates against the local test instance with test sessions.
  * - Deliberately does NOT depend on the live Jikan API. The anime-detail
  *   page fetches from Jikan server-side, which Playwright's browser-level
  *   request mocking can't intercept, and a third-party API's uptime is not

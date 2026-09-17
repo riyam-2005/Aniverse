@@ -1,4 +1,4 @@
-import { AnimeGridSkeleton } from "@/components/Skeleton";
+import { AnimeGridSkeleton } from "@/components/ui/Skeleton";
 
 export default function WatchlistLoading() {
   return (

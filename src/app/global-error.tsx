@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { reportError } from "@/components/ErrorReporter";
+import { reportError } from "@/components/ui/ErrorReporter";
 
 // This only fires if the root layout itself throws (e.g. a font or
 // Providers failure) — regular route errors are caught by error.tsx.

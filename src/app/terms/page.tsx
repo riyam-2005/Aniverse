@@ -20,7 +20,7 @@ export default function TermsPage() {
               1. Acceptance of Terms
             </h2>
             <p>
-              By accessing or using AniVerse ("the Site"), you agree to be
+              By accessing or using AniVerse (&quot;the Site&quot;), you agree to be
               bound by these Terms of Service. If you do not agree, please
               do not use the Site.
             </p>
@@ -35,7 +35,7 @@ export default function TermsPage() {
               titles, descriptions, images, ratings, and related metadata
               are sourced from MyAnimeList via the Jikan API. AniVerse does
               not host, stream, upload, or distribute any video content.
-              Links to "watch" or "detail" pages direct users to third-party
+              Links to &quot;watch&quot; or &quot;detail&quot; pages direct users to third-party
               platforms not affiliated with or controlled by AniVerse.
             </p>
           </section>
@@ -65,10 +65,10 @@ export default function TermsPage() {
               4. User Accounts
             </h2>
             <p>
-              If you create an account (e.g. to maintain a watchlist or
+              If you create an account (e.g. to maintain a library or
               participate in Community features), you are responsible for
               keeping your login credentials secure and for any activity
-              under your account. You must not use another person's account
+              under your account. You must not use another person&apos;s account
               without permission.
             </p>
           </section>
@@ -79,7 +79,7 @@ export default function TermsPage() {
             </h2>
             <p>You agree not to:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Scrape, mirror, or republish the Site's data at scale</li>
+              <li>Scrape, mirror, or republish the Site&apos;s data at scale</li>
               <li>Attempt to disrupt, overload, or reverse-engineer the Site</li>
               <li>
                 Post unlawful, harassing, or infringing content in Community
@@ -105,7 +105,7 @@ export default function TermsPage() {
               7. Disclaimer of Warranty
             </h2>
             <p>
-              AniVerse is provided "as is" without warranties of any kind.
+              AniVerse is provided &quot;as is&quot; without warranties of any kind.
               Anime data is sourced from third parties and may be incomplete,
               outdated, or inaccurate. We do not guarantee uninterrupted or
               error-free operation of the Site.

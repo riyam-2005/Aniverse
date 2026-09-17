@@ -1,32 +1,29 @@
-import { prisma } from "@/lib/prisma";
-import { apiOk, withApiHandler } from "@/lib/api";
-import { getAnimeById } from "@/lib/jikan";
+import { apiOk, withApiHandler } from "@/core/utils/api";
+import { createClient } from "@/core/clients/supabase-server";
+import { getAnimeById } from "@/core/clients/jikan";
 
-/**
- * GET /api/comments/recent?sort=newest|top
- *
- * "newest" — most recent comments, chronological.
- * "top" — a genuinely separate query ordered by like count, not just the
- * newest 12 re-sorted client-side (an earlier version of this route did
- * that, using comment length as a stand-in for "quality" before real
- * likes existed — replaced now that CommentLike is a real thing).
- *
- * Anime titles are resolved server-side (deduped + parallel, cached an
- * hour by getAnimeById) so the client component can render immediately.
- */
 export const GET = withApiHandler(async (req) => {
   const sort = new URL(req.url).searchParams.get("sort") === "top" ? "top" : "newest";
+  const supabase = createClient();
 
-  const comments = await prisma.comment.findMany({
-    orderBy:
-      sort === "top"
-        ? [{ likes: { _count: "desc" } }, { createdAt: "desc" }]
-        : { createdAt: "desc" },
-    take: 12,
-    include: { user: { select: { name: true } }, _count: { select: { likes: true } } },
-  });
+  let query = supabase
+    .from("comments")
+    .select("id, content, created_at, mal_id, user_id, like_count, profiles(display_name, username)")
+    .is("deleted_at", null)
+    .limit(12);
 
-  const uniqueIds = [...new Set(comments.map((c) => c.animeMalId))];
+  if (sort === "top") {
+    query = query.order("like_count", { ascending: false }).order("created_at", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+
+  const { data: comments, error } = await query;
+  if (error) throw error;
+
+  const list = comments || [];
+  const uniqueIds = Array.from(new Set(list.map((c) => c.mal_id)));
+
   const animeById = new Map(
     (
       await Promise.all(
@@ -37,16 +34,17 @@ export const GET = withApiHandler(async (req) => {
 
   return apiOk(
     {
-      comments: comments.map((c) => {
-        const anime = animeById.get(c.animeMalId);
+      comments: list.map((c: any) => {
+        const anime = animeById.get(c.mal_id);
+        const authorName = c.profiles?.display_name || c.profiles?.username || "Anime Fan";
         return {
           id: c.id,
           content: c.content,
-          createdAt: c.createdAt,
-          animeMalId: c.animeMalId,
-          animeTitle: anime?.title_english || anime?.title || `Anime #${c.animeMalId}`,
-          likeCount: c._count.likes,
-          user: { name: c.user.name },
+          createdAt: c.created_at,
+          animeMalId: c.mal_id,
+          animeTitle: anime?.title_english || anime?.title || `Anime #${c.mal_id}`,
+          likeCount: c.like_count || 0,
+          user: { name: authorName },
         };
       }),
     },

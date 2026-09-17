@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiError, apiOk, readJson, withApiHandler } from "@/lib/api";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { ensureAnime } from "@/lib/anime";
+import { revalidatePath } from "next/cache";
+import { apiError, apiOk, readJson, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit } from "@/core/clients/rate-limit";
+import { createClient, getUser } from "@/core/clients/supabase-server";
+import { ensureAnime } from "@/core/clients/anime.service";
 
 const createSchema = z.object({
   content: z
@@ -20,117 +19,106 @@ export const GET = withApiHandler(async (req: Request, { params }: { params: { i
     return apiError("Invalid anime id", 400, "VALIDATION_ERROR");
   }
 
-  const session = await getServerSession(authOptions);
-  const currentUserId = (session?.user as { id?: string } | undefined)?.id;
+  const user = await getUser();
+  const supabase = createClient();
 
-  const comments = await prisma.comment.findMany({
-    where: { animeMalId },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: {
-      user: { select: { id: true, name: true } },
-      likes: currentUserId ? { where: { userId: currentUserId }, select: { id: true } } : false,
-      _count: { select: { likes: true } },
-    },
-  });
+  const { data: comments, error } = await supabase
+    .from("comments")
+    .select("id, content, created_at, user_id, like_count, profiles(id, username, display_name, avatar_url)")
+    .eq("mal_id", animeMalId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+
+  let myLikedCommentIds = new Set<string>();
+  if (user) {
+    const { data: likes } = await supabase
+      .from("comment_likes")
+      .select("comment_id")
+      .eq("user_id", user.id);
+    if (likes) {
+      myLikedCommentIds = new Set(likes.map((l) => l.comment_id));
+    }
+  }
 
   return apiOk(
     {
-      comments: comments.map((c) => ({
+      comments: (comments || []).map((c: any) => ({
         id: c.id,
         content: c.content,
-        createdAt: c.createdAt,
-        user: { id: c.user.id, name: c.user.name },
-        likeCount: c._count.likes,
-        likedByMe: currentUserId ? c.likes.length > 0 : false,
+        createdAt: c.created_at,
+        user: {
+          id: c.user_id,
+          name: c.profiles?.display_name || c.profiles?.username || "Anime Fan",
+          avatarUrl: c.profiles?.avatar_url,
+        },
+        likeCount: c.like_count || 0,
+        likedByMe: myLikedCommentIds.has(c.id),
       })),
     },
     200,
-    // private: this payload includes the viewer's own like state, so it
-    // must never be served from a shared/CDN cache to a different user.
     { maxAge: 10, scope: "private" }
   );
 });
 
-export const POST = withApiHandler(
-  async (req: Request, { params }: { params: { id: string } }) => {
-    const animeMalId = Number(params.id);
-    if (!Number.isFinite(animeMalId)) {
-      return apiError("Invalid anime id", 400, "VALIDATION_ERROR");
-    }
-
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string } | undefined)?.id;
-    if (!userId) {
-      return apiError("You need to sign in to comment.", 401, "UNAUTHENTICATED");
-    }
-
-    // 10 comments per user per 10 minutes — generous for real discussion,
-    // tight enough to slow down spam/flooding.
-    const rate = await checkRateLimit(`comment:${userId}`, 10, 10 * 60 * 1000);
-    if (!rate.ok) {
-      return apiError("You're commenting too fast. Please slow down.", 429, "RATE_LIMITED");
-    }
-
-    const body = await readJson(req);
-    const parsed = createSchema.safeParse(body);
-    if (!parsed.success) {
-      return apiError(parsed.error.issues[0]?.message ?? "Invalid input", 400, "VALIDATION_ERROR");
-    }
-
-    await ensureAnime(animeMalId);
-
-    const comment = await prisma.comment.create({
-      data: {
-        animeMalId,
-        userId,
-        content: parsed.data.content,
-      },
-      include: { user: { select: { id: true, name: true } } },
-    });
-
-    // Best-effort: ping other people watching this same title. Never let a
-    // notification failure fail the comment itself — the comment already
-    // succeeded above.
-    try {
-      const watchers = await prisma.watchlistItem.findMany({
-        where: { malId: animeMalId, userId: { not: userId } },
-        select: { userId: true, title: true },
-        distinct: ["userId"],
-      });
-
-      for (const w of watchers) {
-        const existingUnread = await prisma.notification.findFirst({
-          where: { userId: w.userId, type: "NEW_COMMENT", animeMalId, read: false },
-        });
-        // One unread "new comment" ping per anime at a time — a burst of
-        // comments shouldn't stack duplicate notifications for the same title.
-        if (existingUnread) continue;
-
-        await prisma.notification.create({
-          data: {
-            userId: w.userId,
-            type: "NEW_COMMENT",
-            animeMalId,
-            message: `New comment on ${w.title}`,
-          },
-        });
-      }
-    } catch {
-      // Notifications are a nice-to-have — swallow errors here rather than
-      // turning a successful comment post into a 500.
-    }
-
-    return apiOk(
-      {
-        id: comment.id,
-        content: comment.content,
-        createdAt: comment.createdAt,
-        user: { id: comment.user.id, name: comment.user.name },
-        likeCount: 0,
-        likedByMe: false,
-      },
-      201
-    );
+export const POST = withApiHandler(async (req: Request, { params }: { params: { id: string } }) => {
+  const animeMalId = Number(params.id);
+  if (!Number.isFinite(animeMalId)) {
+    return apiError("Invalid anime id", 400, "VALIDATION_ERROR");
   }
-);
+
+  const user = await getUser();
+  if (!user) {
+    return apiError("You need to sign in to comment.", 401, "UNAUTHENTICATED");
+  }
+
+  const rate = await checkRateLimit(`comment:${user.id}`, 10, 10 * 60 * 1000);
+  if (!rate.ok) {
+    return apiError("You're commenting too fast. Please slow down.", 429, "RATE_LIMITED");
+  }
+
+  const body = await readJson(req);
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(parsed.error.issues[0]?.message ?? "Invalid input", 400, "VALIDATION_ERROR");
+  }
+
+  await ensureAnime(animeMalId);
+
+  const supabase = createClient();
+  const { data: comment, error } = await supabase
+    .from("comments")
+    .insert({
+      mal_id: animeMalId,
+      user_id: user.id,
+      content: parsed.data.content,
+    })
+    .select("*, profiles(id, username, display_name, avatar_url)")
+    .single();
+
+  if (error) throw error;
+
+  try {
+    revalidatePath(`/anime/${animeMalId}`);
+    revalidatePath("/community");
+  } catch {
+    // Non-critical cache revalidation catch
+  }
+
+  return apiOk(
+    {
+      id: comment.id,
+      content: comment.content,
+      createdAt: comment.created_at,
+      user: {
+        id: user.id,
+        name: (comment as any).profiles?.display_name || (comment as any).profiles?.username || "You",
+      },
+      likeCount: 0,
+      likedByMe: false,
+    },
+    201
+  );
+});

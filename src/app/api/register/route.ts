@@ -1,8 +1,7 @@
-import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { apiError, apiOk, readJson, withApiHandler } from "@/lib/api";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { apiError, apiOk, readJson, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit, getClientIp } from "@/core/clients/rate-limit";
+import { createClient } from "@/core/clients/supabase-server";
 
 const schema = z.object({
   name: z
@@ -14,14 +13,13 @@ const schema = z.object({
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
-    .max(72, "Password is too long") // bcrypt silently truncates beyond 72 bytes
+    .max(72, "Password is too long")
     .regex(/[a-z]/, "Password must include a lowercase letter")
     .regex(/[A-Z]/, "Password must include an uppercase letter")
     .regex(/[0-9]/, "Password must include a number"),
 });
 
 export const POST = withApiHandler(async (req: Request) => {
-  // 5 registration attempts per IP per 10 minutes — slows down bulk account creation.
   const rate = await checkRateLimit(`register:${getClientIp(req)}`, 5, 10 * 60 * 1000);
   if (!rate.ok) {
     return apiError("Too many attempts. Please try again later.", 429, "RATE_LIMITED");
@@ -34,17 +32,22 @@ export const POST = withApiHandler(async (req: Request) => {
   }
 
   const { name, email, password } = parsed.data;
+  const supabase = createClient();
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return apiError("An account with that email already exists", 409, "DUPLICATE");
-  }
-
-  const hashed = await bcrypt.hash(password, 12);
-
-  const user = await prisma.user.create({
-    data: { name, email, passwordHash: hashed },
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        display_name: name,
+        username: email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase(),
+      },
+    },
   });
 
-  return apiOk({ id: user.id, email: user.email }, 201);
+  if (error) {
+    return apiError(error.message, 400, "AUTH_ERROR");
+  }
+
+  return apiOk({ id: data.user?.id, email: data.user?.email }, 201);
 });

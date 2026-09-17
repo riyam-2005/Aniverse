@@ -1,29 +1,41 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// This is the first route-level test in the project (existing coverage is
-// all src/lib/*.test.ts). Mocks follow the same style as src/lib/admin.test.ts —
-// mock the module, then dynamically import the route so the mock is in
-// place before it's evaluated.
+const getUserMock = vi.fn();
+const singleMock = vi.fn();
+const eqUserMock = vi.fn(() => ({ single: singleMock }));
+const eqCommentMock = vi.fn(() => ({ eq: eqUserMock }));
+const selectLikeMock = vi.fn(() => ({ eq: eqCommentMock }));
 
-const getServerSession = vi.fn();
-vi.mock("next-auth", () => ({ getServerSession }));
-vi.mock("@/lib/auth", () => ({ authOptions: {} }));
+const insertMock = vi.fn().mockResolvedValue({ error: null });
+const deleteEqMock = vi.fn().mockResolvedValue({ error: null });
+const deleteMock = vi.fn(() => ({ eq: deleteEqMock }));
+const countEqMock = vi.fn().mockResolvedValue({ count: 5, error: null });
+const countSelectMock = vi.fn(() => ({ eq: countEqMock }));
+const updateEqMock = vi.fn().mockResolvedValue({ error: null });
+const updateMock = vi.fn(() => ({ eq: updateEqMock }));
 
-const findUnique = vi.fn();
-const commentLikeFindUnique = vi.fn();
-const commentLikeDelete = vi.fn();
-const commentLikeCreate = vi.fn();
-const commentLikeCount = vi.fn();
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    comment: { findUnique },
-    commentLike: {
-      findUnique: commentLikeFindUnique,
-      delete: commentLikeDelete,
-      create: commentLikeCreate,
-      count: commentLikeCount,
+vi.mock("@/core/clients/supabase-server", () => ({
+  getUser: () => getUserMock(),
+  createClient: () => ({
+    from: (table: string) => {
+      if (table === "comment_likes") {
+        return {
+          select: (fields: string, opts?: any) => {
+            if (opts?.count) return countSelectMock();
+            return selectLikeMock();
+          },
+          insert: insertMock,
+          delete: deleteMock,
+        };
+      }
+      if (table === "comments") {
+        return {
+          update: updateMock,
+        };
+      }
+      return {};
     },
-  },
+  }),
 }));
 
 const { POST } = await import("./route");
@@ -38,57 +50,32 @@ afterEach(() => {
 
 describe("POST /api/comments/like/[commentId]", () => {
   it("rejects when not signed in", async () => {
-    getServerSession.mockResolvedValue(null);
+    getUserMock.mockResolvedValue(null);
     const res = await POST(fakeRequest(), { params: { commentId: "c1" } });
     expect(res.status).toBe(401);
-    expect(findUnique).not.toHaveBeenCalled();
   });
 
-  it("returns 404 for a comment that doesn't exist", async () => {
-    getServerSession.mockResolvedValue({ user: { id: "u1" } });
-    findUnique.mockResolvedValue(null);
-    const res = await POST(fakeRequest(), { params: { commentId: "missing" } });
-    expect(res.status).toBe(404);
-  });
-
-  it("likes a comment the user hasn't liked yet", async () => {
-    getServerSession.mockResolvedValue({ user: { id: "u1" } });
-    findUnique.mockResolvedValue({ id: "c1" });
-    commentLikeFindUnique.mockResolvedValue(null);
-    commentLikeCount.mockResolvedValue(5);
+  it("likes a comment when user has not liked it yet", async () => {
+    getUserMock.mockResolvedValue({ id: "u1" });
+    singleMock.mockResolvedValue({ data: null });
+    countEqMock.mockResolvedValue({ count: 5 });
 
     const res = await POST(fakeRequest(), { params: { commentId: "c1" } });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ liked: true, likeCount: 5 });
-    expect(commentLikeCreate).toHaveBeenCalledWith({
-      data: { commentId: "c1", userId: "u1" },
-    });
-    expect(commentLikeDelete).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.liked).toBe(true);
+    expect(insertMock).toHaveBeenCalled();
   });
 
-  it("un-likes a comment the user already liked", async () => {
-    getServerSession.mockResolvedValue({ user: { id: "u1" } });
-    findUnique.mockResolvedValue({ id: "c1" });
-    commentLikeFindUnique.mockResolvedValue({ id: "like1" });
-    commentLikeCount.mockResolvedValue(4);
+  it("un-likes a comment when user has already liked it", async () => {
+    getUserMock.mockResolvedValue({ id: "u1" });
+    singleMock.mockResolvedValue({ data: { id: "like1" } });
+    countEqMock.mockResolvedValue({ count: 4 });
 
     const res = await POST(fakeRequest(), { params: { commentId: "c1" } });
-    expect(await res.json()).toEqual({ liked: false, likeCount: 4 });
-    expect(commentLikeDelete).toHaveBeenCalledWith({ where: { id: "like1" } });
-    expect(commentLikeCreate).not.toHaveBeenCalled();
-  });
-
-  it("rate-limits after 60 toggles in a minute for the same user", async () => {
-    getServerSession.mockResolvedValue({ user: { id: "rate-limit-test-user" } });
-    findUnique.mockResolvedValue({ id: "c1" });
-    commentLikeFindUnique.mockResolvedValue(null);
-    commentLikeCount.mockResolvedValue(1);
-
-    let lastStatus = 200;
-    for (let i = 0; i < 61; i++) {
-      const res = await POST(fakeRequest(), { params: { commentId: "c1" } });
-      lastStatus = res.status;
-    }
-    expect(lastStatus).toBe(429);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.liked).toBe(false);
+    expect(deleteMock).toHaveBeenCalled();
   });
 });

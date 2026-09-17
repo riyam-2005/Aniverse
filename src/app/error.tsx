@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import ErrorState from "@/components/ErrorState";
-import { reportError } from "@/components/ErrorReporter";
+import ErrorState from "@/components/ui/ErrorState";
+import { reportError } from "@/components/ui/ErrorReporter";
 
 export default function RootError({
   error,

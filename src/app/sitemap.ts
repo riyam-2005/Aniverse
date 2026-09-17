@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getTopAnime } from "@/lib/jikan";
+import { getTopAnime } from "@/core/clients/jikan";
 
 const siteUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 

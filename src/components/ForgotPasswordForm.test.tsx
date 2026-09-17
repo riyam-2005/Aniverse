@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import ForgotPasswordForm from "./ForgotPasswordForm";
+import ForgotPasswordForm from "@/components/features/auth/ForgotPasswordForm";
 
 describe("ForgotPasswordForm", () => {
   beforeEach(() => {

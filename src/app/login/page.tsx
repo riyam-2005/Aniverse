@@ -1,34 +1,26 @@
 import type { Metadata } from "next";
-import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
-import LoginForm from "@/components/LoginForm";
+import { Suspense } from "react";
+import { getUser } from "@/core/clients/supabase-server";
+import LoginForm from "@/components/features/auth/LoginForm";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Sign In — AniVerse",
 };
 
 export default async function LoginPage() {
-  const session = await getServerSession(authOptions);
-  if (session) {
+  const user = await getUser();
+  if (user) {
     redirect("/");
   }
 
-  const hasGoogle = Boolean(
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-  );
-  const hasPhone = Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
-      process.env.NEXT_PUBLIC_FIREBASE_APP_ID &&
-      process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
-      process.env.FIREBASE_ADMIN_PRIVATE_KEY
-  );
-
   return (
-    <div className="container-page flex min-h-[70vh] items-center py-16">
-      <LoginForm hasGoogle={hasGoogle} hasPhone={hasPhone} />
+    <div className="container-page flex min-h-[70vh] items-center justify-center py-16">
+      <Suspense fallback={<div className="h-40 w-full max-w-sm rounded-2xl bg-panel2 skeleton" />}>
+        <LoginForm hasGoogle={true} />
+      </Suspense>
     </div>
   );
 }

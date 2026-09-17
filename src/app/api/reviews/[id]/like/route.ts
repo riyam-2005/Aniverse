@@ -1,22 +1,22 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiOk, apiError, withApiHandler } from "@/lib/api";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { apiOk, apiError, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit } from "@/core/clients/rate-limit";
+import { createClient, getUser } from "@/core/clients/supabase-server";
 
 export const POST = withApiHandler(async (_req: Request, { params }: { params: { id: string } }) => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-  if (!userId) return apiError("You need to sign in to react to reviews.", 401);
+  const user = await getUser();
+  if (!user) return apiError("You need to sign in to react to reviews.", 401);
 
-  const rate = await checkRateLimit(`review-like:${userId}`, 40, 60 * 1000);
+  const rate = await checkRateLimit(`review-like:${user.id}`, 40, 60 * 1000);
   if (!rate.ok) {
     return apiError("Too many requests. Slow down.", 429, "RATE_LIMITED");
   }
 
-  const review = await prisma.review.findUnique({ where: { id: params.id } });
+  const supabase = createClient();
+  const { data: review } = await supabase.from("reviews").select("id, likes_count").eq("id", params.id).single();
   if (!review) return apiError("Review not found", 404);
 
-  // Return success toggle response
-  return apiOk({ liked: true, reviewId: params.id });
+  const newLikes = (review.likes_count || 0) + 1;
+  await supabase.from("reviews").update({ likes_count: newLikes }).eq("id", params.id);
+
+  return apiOk({ liked: true, reviewId: params.id, likesCount: newLikes });
 });

@@ -1,56 +1,37 @@
 import type { Metadata, Viewport } from "next";
-import { safeJsonLdString } from "@/lib/json-ld";
-import { Bebas_Neue, Inter, IBM_Plex_Mono } from "next/font/google";
+import { safeJsonLdString } from "@/core/utils/json-ld";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import Providers from "@/components/Providers";
-import SplashScreen from "@/components/SplashScreen";
-import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import InstallPrompt from "@/components/InstallPrompt";
-import PageTransition from "@/components/PageTransition";
-import { getGenres } from "@/lib/jikan";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import Providers from "@/components/layout/Providers";
+import SplashScreen from "@/components/ui/SplashScreen";
+import ServiceWorkerRegister from "@/components/ui/ServiceWorkerRegister";
+import InstallPrompt from "@/components/ui/InstallPrompt";
+import PageTransition from "@/components/ui/PageTransition";
+import AppSidebar from "@/components/layout/AppSidebar";
+import MobileNav from "@/components/layout/MobileNav";
+import { getGenres } from "@/core/clients/jikan";
 
-const display = Bebas_Neue({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-display",
-});
-
-const body = Inter({
-  subsets: ["latin"],
-  variable: "--font-body",
-});
-
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
-});
-
-const siteUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "AniVerse — Discover & Track Anime",
+    default: "AniVerse — Your AI-Powered Anime Companion",
     template: "%s — AniVerse",
   },
   description:
-    "Browse trending anime, follow the weekly airing schedule, and track your watchlist. Powered by MyAnimeList data.",
+    "Discover, track, and explore anime with AI-powered personalized recommendations, live airing schedules, and community discussions.",
   applicationName: "AniVerse",
-  keywords: ["anime", "watchlist", "anime schedule", "anime tracker", "MyAnimeList", "trending anime"],
+  keywords: ["anime", "AI anime companion", "anime tracker", "MyAnimeList", "trending anime", "anime schedule"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "AniVerse",
   },
-  // Chrome/Android's standard tag — kept alongside appleWebApp above
-  // rather than instead of it, since iOS Safari still only recognizes the
-  // apple-prefixed one for "Add to Home Screen".
   other: {
     "mobile-web-app-capable": "yes",
   },
@@ -62,30 +43,26 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  // Site-wide defaults — individual pages (e.g. /anime/[id]) override
-  // title/description/images with their own openGraph block, but every
-  // page that doesn't set one still gets a real share preview instead of
-  // a blank/broken card.
   openGraph: {
     type: "website",
     siteName: "AniVerse",
-    title: "AniVerse — Discover & Track Anime",
+    title: "AniVerse — Your AI-Powered Anime Companion",
     description:
-      "Browse trending anime, follow the weekly airing schedule, and track your watchlist. Powered by MyAnimeList data.",
+      "Discover, track, and explore anime with AI-powered personalized recommendations.",
     url: siteUrl,
-    images: [{ url: "/og/default.png", width: 1200, height: 630, alt: "AniVerse" }],
+    images: [{ url: "/images/aniverse-hero-companion.png", width: 1200, height: 630, alt: "AniVerse" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AniVerse — Discover & Track Anime",
+    title: "AniVerse — Your AI-Powered Anime Companion",
     description:
-      "Browse trending anime, follow the weekly airing schedule, and track your watchlist.",
-    images: ["/og/default.png"],
+      "Discover, track, and explore anime with AI-powered personalized recommendations.",
+    images: ["/images/aniverse-hero-companion.png"],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0A0A10",
+  themeColor: "#07070D",
 };
 
 export default async function RootLayout({
@@ -93,11 +70,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Fetched once here (server component) and passed down to Navbar, which
-  // hands it to the SearchFilters dropdown in its filter panel — same
-  // getGenres() source that /search uses, so the genre list stays
-  // consistent across the whole app. Falls back to an empty array if the
-  // Jikan API is unreachable, so a fetch failure never breaks the layout.
   const genres = await getGenres().catch(() => []);
 
   const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
@@ -115,7 +87,11 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className="font-body"
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <script
@@ -123,15 +99,27 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: safeJsonLdString(websiteJsonLd) }}
         />
       </head>
-      <body className="flex min-h-screen flex-col bg-void">
+      <body suppressHydrationWarning className="flex min-h-screen flex-col bg-void text-ink antialiased">
         <Providers>
           <SplashScreen />
           <ServiceWorkerRegister />
           <Navbar genres={genres} />
-          <main className="flex-1">
-            <PageTransition>{children}</PageTransition>
-          </main>
-          <Footer />
+          
+          <div className="flex flex-1 w-full relative">
+            {/* Desktop Left Sidebar (Sticky) */}
+            <AppSidebar />
+
+            {/* Main Content Area */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <main className="flex-1 pb-16 lg:pb-0">
+                <PageTransition>{children}</PageTransition>
+              </main>
+              <Footer />
+            </div>
+          </div>
+
+          {/* Mobile Bottom Navigation */}
+          <MobileNav />
           <InstallPrompt />
         </Providers>
         <Analytics />

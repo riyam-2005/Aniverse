@@ -1,34 +1,24 @@
 #!/usr/bin/env bash
-# Run this after copying in all the files from tonight's session.
-# Stops at the first real failure so you know exactly where things broke.
-#
-#   chmod +x verify.sh && ./verify.sh
-#
+# Aniverse V1 Production Verification Script
 set -e
 
 step() { echo ""; echo "── $1 ──────────────────────────"; }
 
-step "1/6  Installing deps + regenerating Prisma client"
+step "1/5  Installing dependencies"
 npm install
-# npm install already runs `prisma generate` via postinstall — this just
-# confirms it explicitly and fails loudly if that step got skipped.
-npx prisma generate
 
-step "2/6  Applying schema changes to your dev database"
-npx prisma db push
-
-step "3/6  Typecheck"
+step "2/5  TypeScript Typecheck"
 npm run typecheck
 
-step "4/6  Lint"
+step "3/5  ESLint Verification"
 npm run lint
 
-step "5/6  Unit tests"
+step "4/5  Unit & Integration Tests"
 npm test
 
-step "6/6  Production build"
+step "5/5  Production Next.js Build"
 npm run build
 
 echo ""
-echo "✅ All checks passed. Start it with: npm run start"
-echo "   Then confirm http://localhost:3000/api/health returns db: connected"
+echo "✅ All Aniverse V1 checks passed cleanly."
+echo "   Start in production mode: npm run start"

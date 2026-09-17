@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Anime } from "@/types/anime";
-import HeroSpotlight from "./HeroSpotlight";
+import HeroSpotlight from "@/components/features/home/HeroSpotlight";
 
 // next/image and next/link pull in Next's router/runtime context that this
 // isolated component test doesn't set up — swap them for plain DOM

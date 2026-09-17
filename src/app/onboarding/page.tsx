@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { getGenres } from "@/lib/jikan";
-import GenrePicker from "@/components/GenrePicker";
+import { getGenres } from "@/core/clients/jikan";
+import GenrePicker from "@/components/features/dna-profile/GenrePicker";
 
 export const metadata: Metadata = {
   title: "Welcome — AniVerse",
@@ -21,8 +21,8 @@ export default async function OnboardingPage() {
           What do you like watching?
         </h1>
         <p className="mt-2 max-w-lg text-sm text-ink-dim">
-          Pick a few genres so we can recommend something before you've
-          added anything to your watchlist. You can always change this
+          Pick a few genres so we can recommend something before you&apos;ve
+          added anything to your library. You can always change this
           later — it just gets better the more you watch.
         </p>
 

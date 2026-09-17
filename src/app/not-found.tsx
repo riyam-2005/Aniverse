@@ -1,5 +1,6 @@
 import Link from "next/link";
-import SearchBar from "@/components/SearchBar";
+import { Suspense } from "react";
+import SearchBar from "@/components/features/search/SearchBar";
 
 export default function NotFound() {
   return (
@@ -19,7 +20,9 @@ export default function NotFound() {
       </p>
 
       <div className="mt-8 w-full max-w-md">
-        <SearchBar />
+        <Suspense fallback={<div className="h-11 w-full rounded-full bg-panel2 skeleton" />}>
+          <SearchBar />
+        </Suspense>
       </div>
 
       <div className="mt-8 flex gap-4">

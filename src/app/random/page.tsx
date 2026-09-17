@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getRandomAnime } from "@/lib/jikan";
+import { getRandomAnime } from "@/core/clients/jikan";
 
 export const dynamic = "force-dynamic";
 

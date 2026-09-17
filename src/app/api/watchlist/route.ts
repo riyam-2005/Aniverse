@@ -1,48 +1,48 @@
-import { getServerSession } from "next-auth/next";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiError, apiOk, readJson, withApiHandler } from "@/lib/api";
-import { checkRateLimit } from "@/lib/rate-limit";
-import { ensureAnime } from "@/lib/anime";
-const WATCH_STATUSES = ["PLANNING", "WATCHING", "COMPLETED", "ON_HOLD", "DROPPED"] as const;
+import { revalidatePath } from "next/cache";
+import { apiError, apiOk, readJson, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit } from "@/core/clients/rate-limit";
+import { createClient, getUser } from "@/core/clients/supabase-server";
+import { ensureAnime } from "@/core/clients/anime.service";
+
+const WATCH_STATUSES = ["PLANNING", "PLAN_TO_WATCH", "WATCHING", "COMPLETED", "ON_HOLD", "DROPPED"] as const;
 
 const addSchema = z.object({
   malId: z.number().int().positive(),
   title: z.string().trim().min(1).max(300),
-  imageUrl: z.string().url(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
   totalEpisodes: z.number().int().positive().nullable().optional(),
-  status: z.enum(WATCH_STATUSES).default("PLANNING"),
+  status: z.enum(WATCH_STATUSES).default("PLAN_TO_WATCH"),
+  currentEpisode: z.number().int().min(0).default(0),
+  score: z.number().int().min(1).max(10).nullable().optional(),
+  isFavorite: z.boolean().default(false),
 });
 
-async function requireUserId(): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  return (session?.user as { id?: string } | undefined)?.id ?? null;
-}
-
 export const GET = withApiHandler(async () => {
-  const userId = await requireUserId();
-  if (!userId) {
+  const user = await getUser();
+  if (!user) {
     return apiError("Not signed in", 401, "UNAUTHENTICATED");
   }
 
-  const items = await prisma.watchlistItem.findMany({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-  });
+  const supabase = createClient();
+  const { data: items, error } = await supabase
+    .from("user_anime")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
 
-  return apiOk({ items });
+  if (error) throw error;
+
+  return apiOk({ items: items || [] });
 });
 
 export const POST = withApiHandler(async (req: Request) => {
-  const userId = await requireUserId();
-  if (!userId) {
+  const user = await getUser();
+  if (!user) {
     return apiError("Not signed in", 401, "UNAUTHENTICATED");
   }
 
-  // 30 watchlist writes per minute per user is generous for real usage,
-  // but stops a runaway client/script from hammering the DB.
-  const rate =await checkRateLimit(`watchlist-write:${userId}`, 30, 60 * 1000);
+  const rate = await checkRateLimit(`watchlist-write:${user.id}`, 30, 60 * 1000);
   if (!rate.ok) {
     return apiError("Too many requests. Slow down a bit.", 429, "RATE_LIMITED");
   }
@@ -53,13 +53,41 @@ export const POST = withApiHandler(async (req: Request) => {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid input", 400, "VALIDATION_ERROR");
   }
 
-  await ensureAnime(parsed.data.malId, parsed.data.title, parsed.data.imageUrl);
+  const normalizedStatus = parsed.data.status === "PLANNING" ? "PLAN_TO_WATCH" : parsed.data.status;
 
-  const item = await prisma.watchlistItem.upsert({
-    where: { userId_malId: { userId, malId: parsed.data.malId } },
-    update: { status: parsed.data.status },
-    create: { userId, ...parsed.data },
-  });
+  await ensureAnime(parsed.data.malId, parsed.data.title, parsed.data.imageUrl || "");
+
+  const supabase = createClient();
+  const { data: item, error } = await supabase
+    .from("user_anime")
+    .upsert(
+      {
+        user_id: user.id,
+        mal_id: parsed.data.malId,
+        title: parsed.data.title,
+        image_url: parsed.data.imageUrl || null,
+        total_episodes: parsed.data.totalEpisodes || null,
+        status: normalizedStatus,
+        current_episode: parsed.data.currentEpisode,
+        score: parsed.data.score || null,
+        is_favorite: parsed.data.isFavorite,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,mal_id" }
+    )
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  try {
+    revalidatePath("/app/library");
+    revalidatePath("/app/history");
+    revalidatePath("/watchlist");
+    revalidatePath(`/anime/${parsed.data.malId}`);
+  } catch {
+    // Non-critical cache revalidation catch
+  }
 
   return apiOk({ item }, 201);
 });

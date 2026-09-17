@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { searchAnime, getGenres } from "@/lib/jikan";
-import AnimeCard from "@/components/AnimeCard";
-import FetchFailedNotice from "@/components/FetchFailedNotice";
-import Pagination from "@/components/Pagination";
-import SearchFilters from "@/components/SearchFilters";
+import { Suspense } from "react";
+import { searchAnime, getGenres } from "@/core/clients/jikan";
+import AnimeCard from "@/components/features/home/AnimeCard";
+import FetchFailedNotice from "@/components/ui/FetchFailedNotice";
+import Pagination from "@/components/ui/Pagination";
+import SearchFilters from "@/components/features/search/SearchFilters";
+
+export const dynamic = "force-dynamic";
 
 interface SearchPageParams {
   q?: string;
@@ -24,8 +27,6 @@ export async function generateMetadata({
   const q = searchParams.q?.trim();
   return {
     title: q ? `"${q}" search results — AniVerse` : "Search — AniVerse",
-    // Search result pages are low-value, near-duplicate content for
-    // crawlers — keep them out of the index, but still perfectly linkable.
     robots: { index: false },
   };
 }
@@ -49,8 +50,6 @@ export default async function SearchPage({
     sort: searchParams.sort as "asc" | "desc" | undefined,
   };
 
-  // A filter-only browse (no typed query) is just as valid as a text
-  // search — only skip the fetch when there's truly nothing to search by.
   const hasActiveSearch =
     !!q || !!filters.type || !!filters.status || !!filters.minScore || !!filters.genres?.length;
 
@@ -63,9 +62,6 @@ export default async function SearchPage({
   const failed = hasActiveSearch ? raw === null : false;
   const result = raw ?? { data: [] };
 
-  // Preserved across pagination links and passed back into the filter
-  // panel's initial state via the URL — this is the full set of params
-  // that define "what search is this," not just the text query.
   const preservedParams = {
     q: q || undefined,
     type: filters.type,
@@ -91,7 +87,9 @@ export default async function SearchPage({
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[260px_1fr]">
         <aside>
-          <SearchFilters genres={genresRaw ?? []} />
+          <Suspense fallback={null}>
+            <SearchFilters genres={genresRaw ?? []} />
+          </Suspense>
         </aside>
 
         <div>

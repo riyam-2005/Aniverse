@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { safeJsonLdString } from "@/lib/json-ld";
+import { safeJsonLdString } from "@/core/utils/json-ld";
 import type { Metadata } from "next";
-import { getAnimeByGenre, getGenres } from "@/lib/jikan";
-import AnimeCard from "@/components/AnimeCard";
-import FetchFailedNotice from "@/components/FetchFailedNotice";
-import OfflinePicksNotice from "@/components/OfflinePicksNotice";
-import { FALLBACK_ANIME } from "@/lib/fallback-anime";
-import Pagination from "@/components/Pagination";
-import GenreExplorer from "@/components/GenreExplorer";
+import { getAnimeByGenre, getGenres } from "@/core/clients/jikan";
+import AnimeCard from "@/components/features/home/AnimeCard";
+import FetchFailedNotice from "@/components/ui/FetchFailedNotice";
+import OfflinePicksNotice from "@/components/ui/OfflinePicksNotice";
+import { FALLBACK_ANIME } from "@/features/ai-companion/fallback.service";
+import Pagination from "@/components/ui/Pagination";
+import GenreExplorer from "@/components/features/dna-profile/GenreExplorer";
 
 export const revalidate = 86400;
 

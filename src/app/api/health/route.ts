@@ -1,23 +1,24 @@
-import { prisma } from "@/lib/prisma";
-import { apiOk } from "@/lib/api";
-import { getJikanHealth } from "@/lib/jikan";
+import { apiOk } from "@/core/utils/api";
+import { getJikanHealth } from "@/core/clients/jikan";
+import { createClient } from "@/core/clients/supabase-server";
 
-// Deliberately never throws a 500 here: monitoring should always get a
-// 200 with a detailed body it can inspect, so uptime checks can tell
-// "our DB is down" apart from "Jikan is down" apart from "everything's
-// fine" instead of collapsing every failure mode into one alert.
 export async function GET() {
   const startedAt = Date.now();
 
+  const supabase = createClient();
+
   const [dbResult, jikan] = await Promise.allSettled([
-    prisma.$queryRaw`SELECT 1`,
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
     getJikanHealth(),
   ]);
 
   const db =
-    dbResult.status === "fulfilled"
+    dbResult.status === "fulfilled" && !dbResult.value.error
       ? { status: "ok" as const }
-      : { status: "down" as const, error: String(dbResult.reason) };
+      : {
+          status: "down" as const,
+          error: dbResult.status === "rejected" ? String(dbResult.reason) : dbResult.value.error?.message,
+        };
 
   const jikanHealth =
     jikan.status === "fulfilled"
@@ -27,10 +28,7 @@ export async function GET() {
   const overall =
     db.status === "ok" && jikanHealth.status !== "down" ? "ok" : "degraded";
 
-  // Process-level metrics — only meaningful on a long-lived Node server
-  // (not on Vercel's stateless functions, where each invocation is a fresh
-  // process), but harmless and useful in that case, and free to compute.
-  const process_ = {
+  const processMetrics = {
     uptimeSeconds: Math.round(process.uptime()),
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
   };
@@ -39,10 +37,10 @@ export async function GET() {
     {
       status: overall,
       checks: { db, jikan: jikanHealth },
-      process: process_,
+      process: processMetrics,
       responseTimeMs: Date.now() - startedAt,
       time: new Date().toISOString(),
     },
-    overall === "ok" ? 200 : 200 // keep 200 so external monitors always get a body to parse; use `status` field for alerting
+    200
   );
 }

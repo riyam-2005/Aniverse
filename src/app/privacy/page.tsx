@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import LegalDocument from "@/components/LegalDocument";
+import LegalDocument from "@/components/layout/LegalDocument";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — AniVerse",

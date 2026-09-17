@@ -1,43 +1,43 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiOk, apiError, withApiHandler } from "@/lib/api";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { apiOk, apiError, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit } from "@/core/clients/rate-limit";
+import { createClient, getUser } from "@/core/clients/supabase-server";
 
-/**
- * POST /api/comments/like/[commentId]
- * Toggles the current user's like on a comment — liking again un-likes it.
- * Returns the new like count and whether the current user now likes it,
- * so the client can update in place without a full re-fetch.
- */
-export const POST = withApiHandler(async (_req, { params }: { params: { commentId: string } }) => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-  if (!userId) return apiError("You need to sign in to like a comment.", 401);
+export const POST = withApiHandler(async (_req, { params }: { params?: { commentId?: string } } = {}) => {
+  const user = await getUser();
+  if (!user) return apiError("You need to sign in to like a comment.", 401);
 
-  // 60 like/unlike toggles per user per minute — plenty for real usage,
-  // enough to stop a script from hammering the like-count aggregate.
-  const rate = await checkRateLimit(`comment-like:${userId}`, 60, 60 * 1000);
+  const commentId = params?.commentId;
+  if (!commentId) return apiError("Missing comment id", 400);
+
+  const rate = await checkRateLimit(`comment-like:${user.id}`, 60, 60 * 1000);
   if (!rate.ok) {
     return apiError("Too many requests. Slow down a bit.", 429, "RATE_LIMITED");
   }
 
-  const comment = await prisma.comment.findUnique({ where: { id: params.commentId } });
-  if (!comment) return apiError("Comment not found.", 404);
-
-  const existing = await prisma.commentLike.findUnique({
-    where: { commentId_userId: { commentId: params.commentId, userId } },
-  });
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("comment_likes")
+    .select("id")
+    .eq("comment_id", commentId)
+    .eq("user_id", user.id)
+    .single();
 
   if (existing) {
-    await prisma.commentLike.delete({ where: { id: existing.id } });
+    await supabase.from("comment_likes").delete().eq("id", existing.id);
   } else {
-    await prisma.commentLike.create({
-      data: { commentId: params.commentId, userId },
+    await supabase.from("comment_likes").insert({
+      comment_id: commentId,
+      user_id: user.id,
     });
   }
 
-  const likeCount = await prisma.commentLike.count({ where: { commentId: params.commentId } });
+  const { count } = await supabase
+    .from("comment_likes")
+    .select("id", { count: "exact", head: true })
+    .eq("comment_id", commentId);
 
-  return apiOk({ liked: !existing, likeCount });
+  const newCount = count || 0;
+  await supabase.from("comments").update({ like_count: newCount }).eq("id", commentId);
+
+  return apiOk({ liked: !existing, likeCount: newCount });
 });

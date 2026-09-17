@@ -1,23 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getServerSession } from "next-auth/next";
 import { notFound } from "next/navigation";
-import { authOptions } from "@/lib/auth";
-import { isAdmin } from "@/lib/admin";
+import { getUser } from "@/core/clients/supabase-server";
+import { isAdmin } from "@/features/admin/admin.service";
 
-// Every /admin/* page is gated here so no individual page can forget the
-// check. Non-admins (including signed-out visitors) get a plain 404 rather
-// than a 403/redirect-to-login — that avoids confirming to a random visitor
-// that an admin area exists at all.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
+  const user = await getUser();
 
-  if (!(await isAdmin(email))) {
+  if (!user || !(await isAdmin(user.email || user.id))) {
     notFound();
   }
 
@@ -25,15 +21,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="container-page py-10">
       <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-line pb-4">
         <Link href="/admin" className="eyebrow mr-4">
-          Admin
+          Admin Portal
         </Link>
-        <Link href="/admin" className="btn-ghost">
+        <Link href="/admin" className="btn-ghost text-xs">
           Dashboard
         </Link>
-        <Link href="/admin/analytics" className="btn-ghost">
+        <Link href="/admin/users" className="btn-ghost text-xs">
+          Users
+        </Link>
+        <Link href="/admin/analytics" className="btn-ghost text-xs">
           Analytics
         </Link>
-        <Link href="/admin/monitoring" className="btn-ghost">
+        <Link href="/admin/monitoring" className="btn-ghost text-xs">
           Monitoring
         </Link>
       </div>

@@ -1,6 +1,8 @@
-import { apiOk, withApiHandler } from "@/lib/api";
-import { getTopAnime } from "@/lib/jikan";
-import { FALLBACK_ANIME } from "@/lib/fallback-anime";
+import { apiOk, withApiHandler } from "@/core/utils/api";
+import { getTopAnime } from "@/core/clients/jikan";
+import { FALLBACK_ANIME } from "@/features/ai-companion/fallback.service";
+
+export const dynamic = "force-dynamic";
 
 export const GET = withApiHandler(async (req: Request) => {
   const url = new URL(req.url);

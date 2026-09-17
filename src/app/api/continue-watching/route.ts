@@ -1,57 +1,54 @@
-import { getServerSession } from "next-auth/next";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiError, apiOk, readJson, withApiHandler } from "@/lib/api";
-import { checkRateLimit } from "@/lib/rate-limit";
-import { ensureAnime } from "@/lib/anime";
+import { apiError, apiOk, readJson, withApiHandler } from "@/core/utils/api";
+import { checkRateLimit } from "@/core/clients/rate-limit";
+import { createClient, getUser } from "@/core/clients/supabase-server";
+import { ensureAnime } from "@/core/clients/anime.service";
 
 const updateSchema = z.object({
   malId: z.number().int().positive(),
   title: z.string().trim().min(1),
-  imageUrl: z.string().url(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
   episodeNumber: z.number().int().positive().default(1),
   timestampSec: z.number().int().min(0).default(0),
   durationSec: z.number().int().positive().optional(),
 });
 
 export const GET = withApiHandler(async () => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-
-  if (!userId) {
+  const user = await getUser();
+  if (!user) {
     return apiOk({ items: [] });
   }
 
-  const items = await prisma.continueWatching.findMany({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-    take: 12,
-  });
+  const supabase = createClient();
+  const { data: items } = await supabase
+    .from("user_anime")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status", "WATCHING")
+    .order("updated_at", { ascending: false })
+    .limit(12);
 
   return apiOk({
-    items: items.map((item) => ({
+    items: (items || []).map((item) => ({
       id: item.id,
-      malId: item.malId,
+      malId: item.mal_id,
       title: item.title,
-      imageUrl: item.imageUrl,
-      episodeNumber: item.episodeNumber,
-      timestampSec: item.timestampSec,
-      durationSec: item.durationSec,
-      updatedAt: item.updatedAt,
+      imageUrl: item.image_url || "",
+      episodeNumber: item.current_episode || 1,
+      timestampSec: item.progress_seconds || 0,
+      totalEpisodes: item.total_episodes,
+      updatedAt: item.updated_at,
     })),
   });
 });
 
 export const POST = withApiHandler(async (req: Request) => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-
-  if (!userId) {
+  const user = await getUser();
+  if (!user) {
     return apiError("Sign in to track continue watching progress", 401, "UNAUTHENTICATED");
   }
 
-  const rate = await checkRateLimit(`continue-watching:${userId}`, 60, 60 * 1000);
+  const rate = await checkRateLimit(`continue-watching:${user.id}`, 60, 60 * 1000);
   if (!rate.ok) {
     return apiError("Too many progress updates.", 429, "RATE_LIMITED");
   }
@@ -64,37 +61,38 @@ export const POST = withApiHandler(async (req: Request) => {
 
   const { malId, title, imageUrl, episodeNumber, timestampSec, durationSec } = parsed.data;
 
-  await ensureAnime(malId, title, imageUrl);
+  await ensureAnime(malId, title, imageUrl || "");
 
-  // Update current Continue Watching pointer
-  const record = await prisma.continueWatching.upsert({
-    where: { userId_malId: { userId, malId } },
-    update: {
-      title,
-      imageUrl,
-      episodeNumber,
-      timestampSec,
-      durationSec,
-    },
-    create: {
-      userId,
-      malId,
-      title,
-      imageUrl,
-      episodeNumber,
-      timestampSec,
-      durationSec,
-    },
-  });
+  const supabase = createClient();
 
-  // Log to append-only WatchHistory for analytics/recommendations
-  await prisma.watchHistory.create({
-    data: {
-      userId,
-      malId,
-      episodeNumber,
-      progressSec: timestampSec,
-    },
+  // Update current user_anime pointer
+  const { data: record, error: libraryError } = await supabase
+    .from("user_anime")
+    .upsert(
+      {
+        user_id: user.id,
+        mal_id: malId,
+        title,
+        image_url: imageUrl || null,
+        status: "WATCHING",
+        current_episode: episodeNumber,
+        progress_seconds: timestampSec,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,mal_id" }
+    )
+    .select()
+    .single();
+
+  if (libraryError) throw libraryError;
+
+  // Log to append-only watch_history
+  await supabase.from("watch_history").insert({
+    user_id: user.id,
+    mal_id: malId,
+    episode_number: episodeNumber,
+    progress_seconds: timestampSec,
+    duration_seconds: durationSec || null,
   });
 
   return apiOk({ item: record }, 200);

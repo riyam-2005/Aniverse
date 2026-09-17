@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { getSchedule } from "@/lib/jikan";
+import { getSchedule } from "@/core/clients/jikan";
 import type { Weekday } from "@/types/anime";
-import AnimeGrid from "@/components/AnimeGrid";
-import FetchFailedNotice from "@/components/FetchFailedNotice";
-import OfflinePicksNotice from "@/components/OfflinePicksNotice";
-import { FALLBACK_ANIME } from "@/lib/fallback-anime";
+import AnimeGrid from "@/components/features/home/AnimeGrid";
+import FetchFailedNotice from "@/components/ui/FetchFailedNotice";
+import OfflinePicksNotice from "@/components/ui/OfflinePicksNotice";
+import { FALLBACK_ANIME } from "@/features/ai-companion/fallback.service";
 import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Anime Release Calendar | AniVerse",

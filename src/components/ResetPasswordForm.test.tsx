@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import ResetPasswordForm from "./ResetPasswordForm";
+import ResetPasswordForm from "@/components/features/auth/ResetPasswordForm";
 
 const pushMock = vi.fn();
 let currentToken = "valid-token";

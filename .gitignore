@@ -40,3 +40,6 @@ test-results/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Build info
+*.tsbuildinfo

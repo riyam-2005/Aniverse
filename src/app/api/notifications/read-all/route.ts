@@ -1,20 +1,18 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { apiError, apiOk, withApiHandler } from "@/lib/api";
+import { apiOk, apiError, withApiHandler } from "@/core/utils/api";
+import { createClient, getUser } from "@/core/clients/supabase-server";
 
 export const POST = withApiHandler(async () => {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const user = await getUser();
+  if (!user) return apiError("Not signed in.", 401);
 
-  if (!userId) {
-    return apiError("Not signed in", 401, "UNAUTHENTICATED");
-  }
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .is("read_at", null);
 
-  await prisma.notification.updateMany({
-    where: { userId, read: false },
-    data: { read: true },
-  });
+  if (error) throw error;
 
-  return apiOk({ ok: true, message: "All notifications marked as read." });
+  return apiOk({ ok: true });
 });

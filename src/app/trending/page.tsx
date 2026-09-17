@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { safeJsonLdString } from "@/lib/json-ld";
+import { safeJsonLdString } from "@/core/utils/json-ld";
 import type { Metadata } from "next";
-import { getSeasonNow, getTopAiring, getTopAnime, getUpcoming } from "@/lib/jikan";
+import { getSeasonNow, getTopAiring, getTopAnime, getUpcoming } from "@/core/clients/jikan";
 import type { Anime, JikanListResponse } from "@/types/anime";
-import AnimeCard from "@/components/AnimeCard";
-import FetchFailedNotice from "@/components/FetchFailedNotice";
-import OfflinePicksNotice from "@/components/OfflinePicksNotice";
-import { FALLBACK_ANIME } from "@/lib/fallback-anime";
-import Pagination from "@/components/Pagination";
-import TrendingStats from "@/components/TrendingStats";
+import AnimeCard from "@/components/features/home/AnimeCard";
+import FetchFailedNotice from "@/components/ui/FetchFailedNotice";
+import OfflinePicksNotice from "@/components/ui/OfflinePicksNotice";
+import { FALLBACK_ANIME } from "@/features/ai-companion/fallback.service";
+import Pagination from "@/components/ui/Pagination";
+import TrendingStats from "@/components/features/home/TrendingStats";
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Trending Anime — AniVerse",
@@ -35,8 +35,8 @@ export default async function TrendingPage({
 }: {
   searchParams: { tab?: string; page?: string };
 }) {
-  const tab = TABS.some((t) => t.key === searchParams.tab) ? searchParams.tab! : "airing";
-  const page = Math.max(1, Number(searchParams.page) || 1);
+  const tab = TABS.some((t) => t.key === searchParams?.tab) ? searchParams.tab! : "airing";
+  const page = Math.max(1, Number(searchParams?.page) || 1);
 
   const fetchers: Record<string, (page: number) => Promise<JikanListResponse<Anime>>> = {
     airing: getTopAiring,
@@ -47,10 +47,6 @@ export default async function TrendingPage({
 
   const raw = await fetchers[tab](page).catch(() => null);
   const failed = raw === null;
-  // Only substitute the offline picks on page 1 — a failure on page 2+
-  // still gets the plain retry notice, since silently swapping in
-  // unrelated fallback content deep in pagination would be more
-  // confusing than helpful there.
   const showFallback = failed && page === 1;
   const result = raw ?? { data: showFallback ? FALLBACK_ANIME : [] };
 
@@ -61,7 +57,7 @@ export default async function TrendingPage({
     itemListElement: result.data.slice(0, 20).map((a, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/anime/${a.mal_id}`,
+      url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/anime/${a.mal_id}`,
       name: a.title_english || a.title,
     })),
   } : null;

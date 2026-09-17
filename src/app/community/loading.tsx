@@ -1,4 +1,4 @@
-import { SkeletonBlock } from "@/components/Skeleton";
+import { SkeletonBlock } from "@/components/ui/Skeleton";
 
 export default function CommunityLoading() {
   return (

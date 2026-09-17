@@ -1,23 +1,17 @@
 import Image from "next/image";
-import { safeJsonLdString } from "@/lib/json-ld";
+import { safeJsonLdString } from "@/core/utils/json-ld";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getAnimeById } from "@/lib/jikan";
+import { getAnimeById } from "@/core/clients/jikan";
 import { STREAMING_PLATFORMS } from "@/types/anime";
-import dynamic from "next/dynamic";
-import WatchlistButton from "@/components/WatchlistButton";
-import { CommentListSkeleton } from "@/components/Skeleton";
+import { Suspense } from "react";
+import ReviewSection from "@/components/features/anime-details/ReviewSection";
+import CommentSection from "@/components/features/anime-details/CommentSection";
+import WatchlistButton from "@/components/features/watchlist/WatchlistButton";
+import WatchPartyButton from "@/components/features/watchlist/WatchPartyButton";
+import { CommentListSkeleton } from "@/components/ui/Skeleton";
 
-// Reviews and comments are well below the fold and both are "use client"
-// components with their own form state/validation — code-splitting them
-// keeps that JS out of the chunk needed for the initial render (synopsis,
-// poster, streaming links), which is what actually needs to be fast here.
-const ReviewSection = dynamic(() => import("@/components/ReviewSection"), {
-  loading: () => <CommentListSkeleton count={2} />,
-});
-const CommentSection = dynamic(() => import("@/components/CommentSection"), {
-  loading: () => <CommentListSkeleton count={3} />,
-});
+import LocalBroadcastTime from "@/components/layout/LocalBroadcastTime";
 
 export const revalidate = 3600;
 
@@ -153,7 +147,11 @@ export default async function AnimeDetailPage({
               {anime.episodes && <span>{anime.episodes} episodes</span>}
               {anime.status && <span>{anime.status}</span>}
               {anime.rating && <span>{anime.rating}</span>}
-              {anime.broadcast?.string && <span>{anime.broadcast.string}</span>}
+              {anime.broadcast?.time ? (
+                <LocalBroadcastTime time={anime.broadcast.time} day={anime.broadcast.day} />
+              ) : (
+                anime.broadcast?.string && <span>{anime.broadcast.string}</span>
+              )}
             </div>
 
             {!!anime.genres?.length && (
@@ -173,13 +171,18 @@ export default async function AnimeDetailPage({
               {anime.synopsis || "No synopsis available yet."}
             </p>
 
-            <div className="mt-7">
+            <div className="mt-7 flex flex-wrap items-center gap-4">
               <WatchlistButton
                 malId={anime.mal_id}
                 title={title}
                 imageUrl={
                   anime.images?.jpg?.image_url || anime.images?.jpg?.large_image_url || ""
                 }
+                totalEpisodes={anime.episodes ?? null}
+              />
+              <WatchPartyButton
+                animeMalId={anime.mal_id}
+                animeTitle={title}
                 totalEpisodes={anime.episodes ?? null}
               />
             </div>
@@ -262,8 +265,12 @@ export default async function AnimeDetailPage({
         </aside>
       </div>
 
-      <ReviewSection animeMalId={id} />
-      <CommentSection animeMalId={id} />
+      <Suspense fallback={<CommentListSkeleton count={2} />}>
+        <ReviewSection animeMalId={id} />
+      </Suspense>
+      <Suspense fallback={<CommentListSkeleton count={3} />}>
+        <CommentSection animeMalId={id} />
+      </Suspense>
     </div>
   );
 }

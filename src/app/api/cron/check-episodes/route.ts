@@ -1,86 +1,82 @@
-import { prisma } from "@/lib/prisma";
-import { apiOk, apiError, withApiHandler } from "@/lib/api";
-import { getAnimeById } from "@/lib/jikan";
+import { apiOk, apiError, withApiHandler } from "@/core/utils/api";
+import { getAdminClient } from "@/core/clients/supabase-admin";
+import { getAnimeById } from "@/core/clients/jikan";
 
-/**
- * GET /api/cron/check-episodes
- *
- * Triggered on a schedule (see vercel.json) rather than by a user action —
- * Vercel's serverless functions can't hold a background timer themselves,
- * so a Cron Job hitting this route is what stands in for "watch for new
- * episodes" on this hosting setup.
- *
- * For every anime someone is actively watching:
- *   1. Fetch its current episode count from Jikan (cached 1h by getAnimeById,
- *      so this is cheap even if the cron runs every few hours).
- *   2. Compare against the last count we saw (AnimeEpisodeCache).
- *   3. If it went up, notify everyone with that title set to WATCHING.
- *
- * Protected by CRON_SECRET so this can't be triggered by anyone who finds
- * the URL — Vercel Cron sends this automatically as a bearer token.
- */
 export const GET = withApiHandler(async (req) => {
   const auth = req.headers.get("authorization");
   if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return apiError("Unauthorized", 401);
   }
 
-  const watching = await prisma.watchlistItem.findMany({
-    where: { status: "WATCHING" },
-    select: { malId: true, title: true, imageUrl: true },
-    distinct: ["malId"],
-  });
+  const adminSupabase = getAdminClient();
 
+  // Get all active titles currently being watched
+  const { data: watching, error: watchError } = await adminSupabase
+    .from("user_anime")
+    .select("mal_id, title, image_url")
+    .eq("status", "WATCHING");
+
+  if (watchError || !watching) {
+    return apiOk({ checked: 0, notified: 0 });
+  }
+
+  const uniqueMalIds = Array.from(new Set(watching.map((w) => w.mal_id)));
   let notified = 0;
 
-  for (const item of watching) {
-    const anime = await getAnimeById(item.malId);
+  for (const malId of uniqueMalIds) {
+    const anime = await getAnimeById(malId);
     if (!anime?.episodes) continue;
 
-    const cached = await prisma.anime.findUnique({
-      where: { malId: item.malId },
-    });
+    const { data: cached } = await adminSupabase
+      .from("anime")
+      .select("last_episodes, title")
+      .eq("mal_id", malId)
+      .single();
 
-    // First time we've ever seen this title — record the baseline without
-    // notifying (otherwise everyone gets pinged the first time a title is
-    // added, not just when a *new* episode airs).
     if (!cached) {
-      await prisma.anime.create({
-        data: {
-          malId: item.malId,
-          title: item.title,
-          imageUrl: item.imageUrl || "",
-          lastEpisodes: anime.episodes,
+      await adminSupabase.from("anime").upsert(
+        {
+          mal_id: malId,
+          title: anime.title_english || anime.title,
+          image_url: anime.images?.jpg?.image_url || null,
+          last_episodes: anime.episodes,
+          updated_at: new Date().toISOString(),
         },
-      });
+        { onConflict: "mal_id" }
+      );
       continue;
     }
 
-    if (anime.episodes > cached.lastEpisodes) {
-      const watchers = await prisma.watchlistItem.findMany({
-        where: { malId: item.malId, status: "WATCHING" },
-        select: { userId: true },
-        distinct: ["userId"],
-      });
+    if (anime.episodes > cached.last_episodes) {
+      // Find all watchers of this anime
+      const { data: watchers } = await adminSupabase
+        .from("user_anime")
+        .select("user_id, title")
+        .eq("mal_id", malId)
+        .eq("status", "WATCHING");
 
-      for (const w of watchers) {
-        await prisma.notification.create({
-          data: {
-            userId: w.userId,
+      if (watchers) {
+        for (const w of watchers) {
+          await adminSupabase.from("notifications").insert({
+            user_id: w.user_id,
             type: "NEW_EPISODE",
-            animeMalId: item.malId,
-            message: `Episode ${anime.episodes} of ${item.title} is out`,
-          },
-        });
-        notified++;
+            title: "New Episode Available",
+            message: `Episode ${anime.episodes} of ${w.title} is now out!`,
+            data: { mal_id: malId, episode: anime.episodes },
+          });
+          notified++;
+        }
       }
 
-      await prisma.anime.update({
-        where: { malId: item.malId },
-        data: { lastEpisodes: anime.episodes },
-      });
+      await adminSupabase
+        .from("anime")
+        .update({
+          last_episodes: anime.episodes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("mal_id", malId);
     }
   }
 
-  return apiOk({ checked: watching.length, notified });
+  return apiOk({ checked: uniqueMalIds.length, notified });
 });

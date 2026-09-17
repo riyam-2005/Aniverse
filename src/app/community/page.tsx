@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
-import { getAnimeById } from "@/lib/jikan";
+import { createClient } from "@/core/clients/supabase-server";
+import { getAnimeById } from "@/core/clients/jikan";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +24,16 @@ function timeAgo(date: Date) {
 }
 
 export default async function CommunityPage() {
-  const recentComments = await prisma.comment.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    include: { user: { select: { name: true } } },
-  });
+  const supabase = createClient();
+  const { data: recentComments } = await supabase
+    .from("comments")
+    .select("id, content, created_at, mal_id, user_id, profiles(id, username, display_name, avatar_url)")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(30);
 
-  // Resolve each unique anime title/poster from Jikan so the feed can show
-  // what people are actually talking about, not just a bare ID.
-  const uniqueIds = Array.from(new Set(recentComments.map((c) => c.animeMalId)));
+  const comments = recentComments || [];
+  const uniqueIds = Array.from(new Set(comments.map((c) => c.mal_id)));
   const animeMap = new Map<number, { title: string; image: string | null }>();
 
   await Promise.all(
@@ -50,33 +51,33 @@ export default async function CommunityPage() {
   return (
     <div className="container-page py-10">
       <div className="mb-8">
-        <p className="eyebrow mb-1.5">Real, unedited</p>
-        <h1 className="font-display text-4xl tracking-wide text-ink">Community</h1>
+        <p className="eyebrow mb-1.5">Live Discussions</p>
+        <h1 className="font-display text-4xl tracking-wide text-ink">Community Pulse</h1>
         <p className="mt-2 max-w-xl text-sm text-ink-dim">
-          Everything below is a real comment from a real AniVerse member — nothing here is
-          staged or made up.
+          Recent comments and thoughts shared by AniVerse members across all anime titles.
         </p>
       </div>
 
-      {recentComments.length === 0 ? (
-        <div className="rounded-xl border border-line bg-panel px-6 py-12 text-center">
+      {comments.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-panel px-6 py-12 text-center">
           <p className="text-sm text-ink-dim">
-            No discussion yet — comments from any anime page will show up here as soon as
-            people start posting.
+            No discussion yet — comments from any anime page will show up here as soon as people start posting.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {recentComments.map((c) => {
-            const anime = animeMap.get(c.animeMalId);
+          {comments.map((c: any) => {
+            const anime = animeMap.get(c.mal_id);
+            const authorName = c.profiles?.display_name || c.profiles?.username || "Anime Fan";
+
             return (
               <div
                 key={c.id}
-                className="flex gap-4 rounded-xl border border-line bg-panel p-4"
+                className="flex gap-4 rounded-2xl border border-line bg-panel p-4 hover:border-cyan/40 transition-colors"
               >
                 {anime?.image && (
-                  <Link href={`/anime/${c.animeMalId}`} className="shrink-0">
-                    <div className="relative h-20 w-14 overflow-hidden rounded border border-line">
+                  <Link href={`/anime/${c.mal_id}`} className="shrink-0">
+                    <div className="relative h-20 w-14 overflow-hidden rounded-xl border border-line bg-panel2">
                       <Image
                         src={anime.image}
                         alt={anime.title}
@@ -89,16 +90,16 @@ export default async function CommunityPage() {
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-sm font-semibold text-ink">{c.user.name}</span>
+                    <span className="text-sm font-semibold text-ink">{authorName}</span>
                     <span className="text-xs text-ink-faint">commented on</span>
                     <Link
-                      href={`/anime/${c.animeMalId}`}
-                      className="text-sm text-cyan hover:underline"
+                      href={`/anime/${c.mal_id}`}
+                      className="text-sm text-cyan hover:underline font-medium"
                     >
-                      {anime?.title ?? `#${c.animeMalId}`}
+                      {anime?.title ?? `#${c.mal_id}`}
                     </Link>
                     <span className="font-mono text-[11px] text-ink-faint">
-                      · {timeAgo(c.createdAt)}
+                      · {timeAgo(new Date(c.created_at))}
                     </span>
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink-dim">{c.content}</p>
